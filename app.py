@@ -19,16 +19,13 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
-# ตัวอย่างข้อมูลจำลองชั่วคราวเพื่อให้หน้าเว็บแสดงผลได้ทันทีไม่ติด Error
-# (คุณสามารถปรับเปลี่ยนเป็นการดึงข้อมูลจาก db.Model และ Supabase ต่อได้เลยครับ)
-
+# --- หน้าหลัก (Index) ---
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if request.method == 'POST':
-        # รับค่าจากการบันทึกรายการใหม่
+        # รับค่าบันทึกรายการใหม่จากฟอร์ม
         pass
     
-    # ตัวแปรจำลองที่ส่งไปให้ HTML แสดงผล
     current_admin = session.get('user', 'Admin')
     total_investment = 0.0
     total_returned = 0.0
@@ -52,6 +49,7 @@ def index():
         search_query=search_query
     )
 
+# --- ระบบเข้าสู่ระบบ / ออกจากระบบ ---
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -64,21 +62,56 @@ def logout():
     session.pop('user', None)
     return redirect(url_for('login'))
 
+# --- หน้าสมาชิกภายใต้เซลล์ ---
 @app.route('/sales_members')
 def sales_members():
-    return render_template('sales_members.html')
+    current_admin = session.get('user', 'Admin')
+    sales_data = [] # ดึงข้อมูลสมาชิกแยกตามเซลล์จากฐานข้อมูล
+    return render_template(
+        'sales_members.html',
+        current_admin=current_admin,
+        sales_data=sales_data
+    )
 
+# --- หน้ารายชื่อสมาชิกทั้งหมด ---
+@app.route('/all_members')
+def all_members():
+    current_admin = session.get('user', 'Admin')
+    members_list = [] # ดึงรายชื่อสมาชิกทั้งหมด
+    return render_template(
+        'all_members.html',
+        current_admin=current_admin,
+        members_list=members_list
+    )
+
+# --- หน้าสรุปลูกค้า ---
 @app.route('/customer_summary')
 def customer_summary():
-    return render_template('customer_summary.html')
+    current_admin = session.get('user', 'Admin')
+    customer_summaries = [] # สรุปข้อมูลลูกค้ารายบุคคล
+    return render_template(
+        'customer_summary.html',
+        current_admin=current_admin,
+        customer_summaries=customer_summaries
+    )
 
+# --- หน้าสรุปยอดประจำเดือน ---
 @app.route('/monthly_summary_page')
 def monthly_summary_page():
-    return render_template('monthly_summary.html')
+    current_admin = session.get('user', 'Admin')
+    monthly_data = [] # สรุปยอดรายเดือน
+    return render_template(
+        'monthly_summary.html',
+        current_admin=current_admin,
+        monthly_data=monthly_data
+    )
 
+# --- ฟังก์ชันจัดการยอดชำระ ---
 @app.route('/update_payment/<int:tx_id>', methods=['POST'])
 def update_payment(tx_id):
-    # จัดการยอดชำระ
+    payment_type = request.form.get('payment_type')
+    pay_amount = request.form.get('pay_amount')
+    # โค้ดอัปเดตยอดชำระลงฐานข้อมูล
     return redirect(url_for('index'))
 
 if __name__ == "__main__":
