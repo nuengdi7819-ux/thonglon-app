@@ -1,0 +1,244 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>แดชบอร์ดสรุปผลประกอบการ ทองลัน</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Prompt', sans-serif; background-color: #f8f9fa; }
+        .card { border: none; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+    </style>
+</head>
+<body>
+    <nav class="navbar navbar-expand-lg navbar-dark bg-dark mb-4 shadow-sm">
+        <div class="container-fluid">
+            <a class="navbar-brand" href="{{ url_for('index') }}">🏢 ระบบบริหารจัดการ ทองลัน</a>
+            <div class="collapse navbar-collapse justify-content-end">
+                <ul class="navbar-nav align-items-center">
+                    <li class="nav-item me-3"><span class="text-light">ผู้ใช้งาน: <strong>{{ current_admin }}</strong></span></li>
+                    <li class="nav-item me-2"><a class="nav-link active" href="{{ url_for('index') }}">หน้าหลัก</a></li>
+                    <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('sales_members') }}">2. สมาชิกภายใต้เซลล์</a></li>
+                    <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('customer_summary') }}">3. สรุปลูกค้า</a></li>
+                    <li class="nav-item me-2"><a class="nav-link" href="{{ url_for('monthly_summary_page') }}">4. สรุปรายเดือน</a></li>
+                    <li class="nav-item"><a class="btn btn-outline-danger btn-sm" href="{{ url_for('logout') }}">ออกจากระบบ</a></li>
+                </ul>
+            </div>
+        </div>
+    </nav>
+
+    <div class="container mb-5">
+        <!-- สรุปภาพรวม 3 กล่อง -->
+        <div class="row mb-4">
+            <div class="col-md-4 mb-3">
+                <div class="card bg-white p-4">
+                    <h6 class="text-muted">ยอดเงินลงทุนคงเหลือ (ปล่อยกู้)</h6>
+                    <h3 class="text-primary fw-bold">{{ "%.2f"|format(total_investment) }} บาท</h3>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-white p-4">
+                    <h6 class="text-muted">เงินต้นที่ลูกค้าคืนมาแล้ว</h6>
+                    <h3 class="text-info fw-bold">{{ "%.2f"|format(total_returned) }} บาท</h3>
+                </div>
+            </div>
+            <div class="col-md-4 mb-3">
+                <div class="card bg-white p-4">
+                    <h6 class="text-muted">กำไรสุทธิ / ดอกเบี้ยรวมทั้งหมด</h6>
+                    <h3 class="text-success fw-bold">{{ "%.2f"|format(total_profit) }} บาท</h3>
+                </div>
+            </div>
+        </div>
+
+        <!-- ฟอร์มบันทึกรายการใหม่ -->
+        <div class="card bg-white p-4 mb-4">
+            <h5 class="text-primary mb-3">➕ บันทึกรายการใหม่</h5>
+            <form method="POST">
+                <div class="row">
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">ประเภทรายการ:</label>
+                        <select name="type" class="form-select" required>
+                            <option value="ปล่อยกู้เงินสด">3.1 ปล่อยกู้เงินสด (เงินฉุกเฉิน)</option>
+                            <option value="ผ่อนทองคำ">3.2 ผ่อนทองคำ</option>
+                        </select>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">ชื่อลูกค้า:</label>
+                        <input type="text" name="customer_name" id="customerNameInput" class="form-control" list="customerList" placeholder="พิมพ์หรือเลือกชื่อ" oninput="autofillPhone()" required>
+                        <datalist id="customerList">
+                            {% for cname in all_customers %}
+                                <option value="{{ cname }}">
+                            {% endfor %}
+                        </datalist>
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">เบอร์โทรศัพท์:</label>
+                        <input type="text" name="phone" id="phoneInput" class="form-control" placeholder="0812345678">
+                    </div>
+                    <div class="col-md-3 mb-3">
+                        <label class="form-label">ยอดเงินปล่อยกู้ / ต้นทุน (บาท):</label>
+                        <input type="number" step="any" name="principal" class="form-control" placeholder="0.00" required>
+                    </div>
+                </div>
+                <div class="row">
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">อัตราดอกเบี้ยต่อวัน (บาท/วัน):</label>
+                        <input type="number" step="any" name="daily_interest" class="form-control" value="0" required>
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">ส่วนลดพิเศษ (บาท):</label>
+                        <input type="number" step="any" name="discount" class="form-control" value="0">
+                    </div>
+                    <div class="col-md-4 mb-3">
+                        <label class="form-label">ชื่อเซลส์ผู้ดูแล:</label>
+                        <select name="sales_name" class="form-select" required>
+                            <option value="" disabled selected>-- เลือกเซลส์ผู้ดูแล --</option>
+                            {% for sales in sales_list %}
+                                <option value="{{ sales }}">{{ sales }}</option>
+                            {% endfor %}
+                        </select>
+                    </div>
+                </div>
+                <button type="submit" class="btn btn-success">💾 บันทึกข้อมูล</button>
+            </form>
+        </div>
+
+        <!-- ช่องค้นหาประวัติรายบุคคล / เบอร์โทร -->
+        <div class="card bg-white p-3 mb-4">
+            <form method="GET" action="{{ url_for('index') }}" class="row g-3">
+                <div class="col-md-10">
+                    <input type="text" name="search" class="form-control" list="searchCustomerList" placeholder="🔍 ค้นหารายชื่อลูกค้า หรือเบอร์โทรศัพท์ เพื่อดูประวัติการทำธุรกรรม..." value="{{ search_query }}">
+                    <datalist id="searchCustomerList">
+                        {% for cname in all_customers %}
+                            <option value="{{ cname }}">
+                        {% endfor %}
+                    </datalist>
+                </div>
+                <div class="col-md-2">
+                    <button type="submit" class="btn btn-dark w-100">🔍 ค้นหา</button>
+                </div>
+            </form>
+        </div>
+
+        <!-- ตารางประวัติรายการทั้งหมด -->
+        <div class="card bg-white p-4">
+            <h5 class="mb-3">📋 ประวัติรายการทั้งหมด</h5>
+            <div class="table-responsive">
+                <table class="table table-striped table-hover align-middle">
+                    <thead class="table-dark">
+                        <tr>
+                            <th>ID</th>
+                            <th>ประเภท</th>
+                            <th>ชื่อลูกค้า</th>
+                            <th>เบอร์โทร</th>
+                            <th>เซลส์ผู้ดูแล</th>
+                            <th>วันที่กู้</th>
+                            <th>เงินต้น (บาท)</th>
+                            <th>ดอกเบี้ย/วัน</th>
+                            <th>ดอกเบี้ยที่จ่ายแล้ว</th>
+                            <th>ผ่านไป</th>
+                            <th>ดอกเบี้ยสุทธิ (ค้างชำระ)</th>
+                            <th>สถานะ</th>
+                            <th>จัดการ</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        {% for tx in transactions %}
+                        <tr>
+                            <td>{{ tx.id }}</td>
+                            <td><span class="badge bg-info text-dark">{{ tx.type }}</span></td>
+                            <td>{{ tx.customer_name }}</td>
+                            <td>{{ tx.phone }}</td>
+                            <td><span class="badge bg-secondary">{{ tx.sales_name }}</span></td>
+                            <td>{{ tx.start_date }}</td>
+                            <td>{{ "%.2f"|format(tx.principal) }}</td>
+                            <td>{{ "%.2f"|format(tx.daily_interest) }}</td>
+                            <td class="text-success fw-semibold">{{ "%.2f"|format(tx.paid_interest) }}</td>
+                            <td>{{ tx.days_passed }} วัน</td>
+                            <td class="text-danger fw-bold">{{ "%.2f"|format(tx.accumulated_interest) }}</td>
+                            <td>
+                                {% if tx.status == 'คืนแล้ว' %}
+                                    <span class="badge bg-success">คืนแล้ว</span>
+                                {% elif tx.status == 'ตัดยอดบางส่วน' %}
+                                    <span class="badge bg-warning text-dark">ตัดยอดบางส่วน</span>
+                                {% else %}
+                                    <span class="badge bg-primary">ปกติ</span>
+                                {% endif %}
+                            </td>
+                            <td>
+                                {% if tx.status != 'คืนแล้ว' %}
+                                <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#payModal{{ tx.id }}">
+                                    💵 จัดการยอด
+                                </button>
+
+                                <!-- Modal จัดการยอดชำระ -->
+                                <div class="modal fade" id="payModal{{ tx.id }}" tabindex="-1" aria-hidden="true">
+                                    <div class="modal-dialog">
+                                        <div class="modal-content">
+                                            <form action="{{ url_for('update_payment', tx_id=tx.id) }}" method="POST">
+                                                <div class="modal-header">
+                                                    <h5 class="modal-title">จัดการยอด: {{ tx.customer_name }}</h5>
+                                                    <button type="button" class="btn-close" data-bs-dismiss="modal" aria-label="Close"></button>
+                                                </div>
+                                                <div class="modal-body">
+                                                    <p class="text-muted">เงินต้นคงเหลือปัจจุบัน: <strong>{{ "%.2f"|format(tx.principal) }} บาท</strong></p>
+                                                    <p class="text-muted">ดอกเบี้ยคงค้างปัจจุบัน: <strong>{{ "%.2f"|format(tx.accumulated_interest) }} บาท</strong></p>
+                                                    
+                                                    <div class="mb-3">
+                                                        <label class="form-label">เลือกการชำระ:</label>
+                                                        <select name="payment_type" class="form-select" id="payType{{ tx.id }}" onchange="togglePayInput(this.value, {{ tx.id }})" required>
+                                                            <option value="partial">ตัดยอดบางส่วน (ชำระเงินเข้ามา)</option>
+                                                            <option value="full">คืนเงินครบ / ปิดบัญชี</option>
+                                                        </select>
+                                                    </div>
+
+                                                    <div class="mb-3" id="amountBox{{ tx.id }}">
+                                                        <label class="form-label">จำนวนเงินที่จ่ายเข้ามา (บาท):</label>
+                                                        <input type="number" step="any" name="pay_amount" class="form-control" placeholder="0.00">
+                                                        <div class="form-text text-muted">ระบบจะนำไปตัดดอกเบี้ยค้างชำระก่อน ถ้าเหลือจึงนำไปตัดเงินต้น</div>
+                                                    </div>
+                                                </div>
+                                                <div class="modal-footer">
+                                                    <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                                                    <button type="submit" class="btn btn-primary">ยืนยันการทำรายการ</button>
+                                                </div>
+                                            </form>
+                                        </div>
+                                    </div>
+                                </div>
+                                {% else %}
+                                <span class="text-muted">-</span>
+                                {% endif %}
+                            </td>
+                        </tr>
+                        {% else %}
+                        <tr>
+                            <td colspan="13" class="text-center text-muted">ไม่พบข้อมูลในเงื่อนไขที่ค้นหา</td>
+                        </tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+        const customerPhones = {{ customer_phone_map | tojson }};
+
+        function autofillPhone() {
+            const nameInput = document.getElementById('customerNameInput').value.trim();
+            const phoneInput = document.getElementById('phoneInput');
+            if (customerPhones[nameInput]) {
+                phoneInput.value = customerPhones[nameInput];
+            }
+        }
+
+        function togglePayInput(val, id) {
+            const box = document.getElementById('amountBox' + id);
+            box.style.display = (val === 'full') ? 'none' : 'block';
+        }
+    </script>
+</body>
+</html>

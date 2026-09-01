@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8"><title>สรุปลูกค้า - ทองล้น.com</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body { background-color: #f4f6f9; }.sidebar { width: 260px; background: #fff; min-height: 100vh; position: fixed; border-right: 1px solid #e3e6f0; }.main-content { margin-left: 260px; padding: 20px; }</style>
+</head>
+<body>
+    <div class="sidebar d-none d-md-block p-3">
+        <h4><i class="fa-solid fa-coins text-warning"></i> ทองล้น.com</h4>
+        <ul class="list-unstyled mt-4">
+            <li class="py-2 px-3"><a href="/" class="text-decoration-none text-dark"><i class="fa-solid fa-gauge me-2"></i> Dashboard</a></li>
+            <li class="py-2 px-3"><a href="/all_members" class="text-decoration-none text-dark"><i class="fa-solid fa-users me-2"></i> 1. สมาชิกทั้งหมด</a></li>
+            <li class="py-2 px-3"><a href="/sales_members" class="text-decoration-none text-dark"><i class="fa-solid fa-user-tag me-2"></i> 2. สมาชิกภายใต้เซลล์</a></li>
+            <li class="py-2 px-3 bg-warning rounded fw-bold"><a href="/customer_summary" class="text-decoration-none text-dark"><i class="fa-solid fa-address-book me-2"></i> 3. สรุปลูกค้า</a></li>
+            <li class="py-2 px-3 ps-4"><a href="/customer_summary" class="text-decoration-none text-secondary"><small>3.1 เงินฉุกเฉิน</small></a></li>
+            <li class="py-2 px-3 ps-4"><a href="/customer_summary" class="text-decoration-none text-secondary"><small>3.2 ผ่อนทอง</small></a></li>
+            <li class="py-2 px-3"><a href="/monthly_summary_page" class="text-decoration-none text-dark"><i class="fa-solid fa-calendar-days me-2"></i> 4. สรุปยอดรายเดือน</a></li>
+            <hr><li class="py-2 px-3 text-danger"><a href="/logout" class="text-decoration-none text-danger fw-bold"><i class="fa-solid fa-right-from-bracket me-2"></i> ออกจากระบบ</a></li>
+        </ul>
+    </div>
+    <div class="main-content">
+        <h2><i class="fa-solid fa-address-book text-primary"></i> 3. สรุปลูกค้ารายบุคคล (จัดการสถานะการชำระ)</h2>
+        <hr>
+        
+        <!-- 3.1 เงินฉุกเฉิน -->
+        <div class="card p-4 shadow-sm border-0 mb-4">
+            <h4 class="text-danger mb-3"><i class="fa-solid fa-wallet"></i> 3.1 ลูกค้าเงินฉุกเฉิน (ปล่อยกู้เงินสด)</h4>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-secondary"><tr><th>ชื่อลูกค้า</th><th>เซลส์ดูแล</th><th>ยอดกู้คงเหลือ</th><th>สถานะ</th><th>วันที่กู้</th><th>จัดการ (คืนเงิน/ตัดยอด)</th></tr></thead>
+                    <tbody>
+                        {% for tx in cash_loans %}
+                        <tr>
+                            <td class="fw-bold">{{ tx.customer_name }}</td>
+                            <td><span class="badge bg-secondary">{{ tx.sales_name }}</span></td>
+                            <td class="text-primary fw-bold">{{ "{:,.2f}".format(tx.principal) }}</td>
+                            <td>
+                                {% if tx.status == 'คืนแล้ว' %}
+                                    <span class="badge bg-success">คืนแล้ว (ปิดบัญชี)</span>
+                                {% elif tx.status == 'ตัดยอดบางส่วน' %}
+                                    <span class="badge bg-warning text-dark">ตัดยอดบางส่วน</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">ปกติ</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ tx.start_date.strftime('%d/%m/%Y') }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-success fw-bold" data-bs-toggle="modal" data-bs-target="#payModal{{ tx.id }}"><i class="fa-solid fa-cash-register"></i> จัดการยอด</button>
+                            </td>
+                        </tr>
+
+                        <!-- Modal จัดการยอดชำระ -->
+                        <div class="modal fade" id="payModal{{ tx.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form action="/update_payment/{{ tx.id }}" method="POST">
+                                        <div class="modal-header bg-success text-white">
+                                            <h5 class="modal-title">จัดการยอดชำระ: {{ tx.customer_name }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>ยอดเงินต้นคงเหลือปัจจุบัน: <strong>{{ "{:,.2f}".format(tx.principal) }} บาท</strong></p>
+                                            <div class="mb-3">
+                                                <label class="form-label">เลือกรูปแบบการชำระ:</label>
+                                                <select name="payment_type" class="form-select" onchange="togglePayInput(this, {{ tx.id }})" required>
+                                                    <option value="partial">ตัดยอดบางส่วน (ลดเงินต้นลง)</option>
+                                                    <option value="full">คืนครบหมดแล้ว (ปิดบัญชี)</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3" id="payInputBox{{ tx.id }}">
+                                                <label class="form-label">จำนวนเงินที่ชำระเข้ามา (บาท):</label>
+                                                <input type="number" step="0.01" name="pay_amount" class="form-control" placeholder="0.00">
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="submit" class="btn btn-success">ยืนยันการบันทึก</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <tr><td colspan="6" class="text-center text-muted">ไม่มีข้อมูลเงินฉุกเฉิน</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- 3.2 ผ่อนทอง -->
+        <div class="card p-4 shadow-sm border-0">
+            <h4 class="text-warning mb-3"><i class="fa-solid fa-coins"></i> 3.2 ลูกค้าผ่อนทองคำ</h4>
+            <div class="table-responsive">
+                <table class="table table-hover align-middle">
+                    <thead class="table-secondary"><tr><th>ชื่อลูกค้า</th><th>เซลส์ดูแล</th><th>ยอดต้นทุนคงเหลือ</th><th>สถานะ</th><th>วันที่กู้</th><th>จัดการ (คืนเงิน/ตัดยอด)</th></tr></thead>
+                    <tbody>
+                        {% for tx in gold_loans %}
+                        <tr>
+                            <td class="fw-bold">{{ tx.customer_name }}</td>
+                            <td><span class="badge bg-secondary">{{ tx.sales_name }}</span></td>
+                            <td class="text-primary fw-bold">{{ "{:,.2f}".format(tx.principal) }}</td>
+                            <td>
+                                {% if tx.status == 'คืนแล้ว' %}
+                                    <span class="badge bg-success">คืนแล้ว (ปิดบัญชี)</span>
+                                {% elif tx.status == 'ตัดยอดบางส่วน' %}
+                                    <span class="badge bg-warning text-dark">ตัดยอดบางส่วน</span>
+                                {% else %}
+                                    <span class="badge bg-secondary">ปกติ</span>
+                                {% endif %}
+                            </td>
+                            <td>{{ tx.start_date.strftime('%d/%m/%Y') }}</td>
+                            <td>
+                                <button class="btn btn-sm btn-outline-warning text-dark fw-bold" data-bs-toggle="modal" data-bs-target="#payModalGold{{ tx.id }}"><i class="fa-solid fa-cash-register"></i> จัดการยอด</button>
+                            </td>
+                        </tr>
+
+                        <!-- Modal จัดการยอดชำระ ผ่อนทอง -->
+                        <div class="modal fade" id="payModalGold{{ tx.id }}" tabindex="-1">
+                            <div class="modal-dialog">
+                                <div class="modal-content">
+                                    <form action="/update_payment/{{ tx.id }}" method="POST">
+                                        <div class="modal-header bg-warning text-dark">
+                                            <h5 class="modal-title">จัดการยอดผ่อนทอง: {{ tx.customer_name }}</h5>
+                                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                                        </div>
+                                        <div class="modal-body">
+                                            <p>ยอดต้นทุนคงเหลือปัจจุบัน: <strong>{{ "{:,.2f}".format(tx.principal) }} บาท</strong></p>
+                                            <div class="mb-3">
+                                                <label class="form-label">เลือกรูปแบบการชำระ:</label>
+                                                <select name="payment_type" class="form-select" onchange="togglePayInput(this, 'g' + {{ tx.id }})" required>
+                                                    <option value="partial">ตัดยอดบางส่วน (ลดเงินต้นลง)</option>
+                                                    <option value="full">คืนครบหมดแล้ว (ปิดบัญชี)</option>
+                                                </select>
+                                            </div>
+                                            <div class="mb-3" id="payInputBoxg{{ tx.id }}">
+                                                <label class="form-label">จำนวนเงินที่ชำระเข้ามา (บาท):</label>
+                                                <input type="number" step="0.01" name="pay_amount" class="form-control" placeholder="0.00">
+                                            </div>
+                                        </div>
+                                        <div class="modal-footer">
+                                            <button type="submit" class="btn btn-warning">ยืนยันการบันทึก</button>
+                                        </div>
+                                    </form>
+                                </div>
+                            </div>
+                        </div>
+                        {% else %}
+                        <tr><td colspan="6" class="text-center text-muted">ไม่มีข้อมูลผ่อนทองคำ</td></tr>
+                        {% endfor %}
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        function togglePayInput(selectElem, id) {
+            let inputBox = document.getElementById('payInputBox' + id);
+            if (selectElem.value === 'full') {
+                inputBox.style.display = 'none';
+            } else {
+                inputBox.style.display = 'block';
+            }
+        }
+    </script>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+</body>
+</html>

@@ -1,0 +1,49 @@
+<!DOCTYPE html>
+<html lang="th">
+<head>
+    <meta charset="UTF-8"><title>สมาชิกทั้งหมด - ทองล้น.com</title>
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>body { background-color: #f4f6f9; }.sidebar { width: 260px; background: #fff; min-height: 100vh; position: fixed; border-right: 1px solid #e3e6f0; }.main-content { margin-left: 260px; padding: 20px; }</style>
+</head>
+<body>
+    <div class="sidebar d-none d-md-block p-3">
+        <h4><i class="fa-solid fa-coins text-warning"></i> ทองล้น.com</h4>
+        <ul class="list-unstyled mt-4">
+            <li class="py-2 px-3"><a href="/" class="text-decoration-none text-dark"><i class="fa-solid fa-gauge me-2"></i> Dashboard</a></li>
+            <li class="py-2 px-3 bg-warning rounded fw-bold"><a href="/all_members" class="text-decoration-none text-dark"><i class="fa-solid fa-users me-2"></i> 1. สมาชิกทั้งหมด</a></li>
+            <li class="py-2 px-3"><a href="/sales_members" class="text-decoration-none text-dark"><i class="fa-solid fa-user-tag me-2"></i> 2. สมาชิกภายใต้เซลล์</a></li>
+            <li class="py-2 px-3"><a href="/customer_summary" class="text-decoration-none text-dark"><i class="fa-solid fa-address-book me-2"></i> 3. สรุปลูกค้า</a></li>
+            <li class="py-2 px-3 ps-4"><a href="/customer_summary" class="text-decoration-none text-secondary"><small>3.1 เงินฉุกเฉิน</small></a></li>
+            <li class="py-2 px-3 ps-4"><a href="/customer_summary" class="text-decoration-none text-secondary"><small>3.2 ผ่อนทอง</small></a></li>
+            <li class="py-2 px-3"><a href="/monthly_summary_page" class="text-decoration-none text-dark"><i class="fa-solid fa-calendar-days me-2"></i> 4. สรุปยอดรายเดือน</a></li>
+            <hr><li class="py-2 px-3 text-danger"><a href="/logout" class="text-decoration-none text-danger fw-bold"><i class="fa-solid fa-right-from-bracket me-2"></i> ออกจากระบบ</a></li>
+        </ul>
+    </div>
+    <div class="main-content">
+        <h2><i class="fa-solid fa-users text-primary"></i> 1. รายชื่อสมาชิกทั้งหมดในระบบ</h2>
+        <hr>
+        <div class="card p-4 shadow-sm border-0">
+            <table class="table table-hover align-middle">
+                <thead class="table-dark">
+                    <tr><th>ID</th><th>ชื่อลูกค้า</th><th>ประเภทรายการ</th><th>ยอดเงินต้น (บาท)</th><th>เซลส์ผู้ดูแล</th><th>วันที่ทำรายการ</th></tr>
+                </thead>
+                <tbody>
+                    {% for tx in transactions %}
+                    <tr>
+                        <td>{{ tx.id }}</td>
+                        <td class="fw-bold text-primary">{{ tx.customer_name }}</td>
+                        <td><span class="badge bg-info text-dark">{{ tx.type }}</span></td>
+                        <td>{{ "{:,.2f}".format(tx.principal) }}</td>
+                        <td><span class="badge bg-secondary">{{ tx.sales_name }}</span></td>
+                        <td>{{ tx.start_date.strftime('%d/%m/%Y') }}</td>
+                    </tr>
+                    {% else %}
+                    <tr><td colspan="6" class="text-center text-muted py-4">ยังไม่มีข้อมูลสมาชิกในระบบ</td></tr>
+                    {% endfor %}
+                </tbody>
+            </table>
+        </div>
+    </div>
+</body>
+</html>
