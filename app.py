@@ -20,7 +20,7 @@ if database_url and database_url.startswith("postgres://"):
 
 app.config["SQLALCHEMY_DATABASE_URI"] = (
     database_url
-    or "postgresql://postgres:thonglon789..@db.rzgtdsobqpnbbtvuuyp.supabase.co:5432/postgres"
+    or "postgresql://postgres:thonglon789@db.rzgtdsobqpnbbtvuuyp.supabase.co:5432/postgres"
 )
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 db = SQLAlchemy(app)
