@@ -19,22 +19,40 @@ app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
-# --- โค้ดส่วน Route หน้าเว็บ ---
+# --- โค้ดส่วน Route หน้าเว็บทั้งหมด ---
 
 @app.route('/')
 def index():
-    # ส่งไปที่หน้า index.html (หากมีไฟล์เทมเพลตอยู่ในโฟลเดอร์ templates)
     return render_template('index.html')
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
-    # โค้ดจัดการการเข้าสู่ระบบ
     if request.method == 'POST':
-        # รับค่าจากฟอร์มล็อกอินตามต้องการ
+        # โค้ดตรวจสอบข้อมูลผู้ใช้จากฟอร์มและฐานข้อมูล Supabase
         pass
     return render_template('login.html')
 
-# (สามารถวาง Model ตารางฐานข้อมูล หรือ Route อื่นๆ เพิ่มเติมตรงนี้ได้เลยครับ)
+@app.route('/sales-members')
+def sales_members():
+    # หน้าจัดการหรือแสดงข้อมูลสมาชิกฝั่งยอดขาย
+    return render_template('sales_members.html')
+
+@app.route('/all-members')
+def all_members():
+    # หน้าแสดงรายชื่อสมาชิกทั้งหมด
+    return render_template('all_members.html')
+
+@app.route('/customer-summary')
+def customer_summary():
+    # หน้าสรุปข้อมูลลูกค้า
+    return render_template('customer_summary.html')
+
+@app.route('/monthly-summary')
+def monthly_summary():
+    # หน้าสรุปยอดประจำเดือน
+    return render_template('monthly_summary.html')
+
+# (สามารถเพิ่ม Route อื่นๆ ต่อจากตรงนี้ได้เลยครับ)
 
 if __name__ == "__main__":
     app.run(debug=True, port=5000)
