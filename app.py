@@ -135,8 +135,22 @@ def index():
 def login():
     if request.method == 'POST':
         username = request.form.get('username')
-        session['user'] = username if username else 'nice'
-        return redirect(url_for('index'))
+        password = request.form.get('password')
+        
+        # กำหนดรหัสผ่านแยกriรายบุคคล
+        passwords = {
+            'nueng': '909090',
+            'nice': '022540'
+        }
+        
+        # ตรวจสอบว่ามีชื่อผู้ใช้นี้จริง และรหัสผ่านถูกต้องตามของใครของมัน
+        if username in passwords and password == passwords[username]:
+            session['user'] = username
+            return redirect(url_for('index'))
+        else:
+            flash('ชื่อผู้ใช้หรือรหัสผ่านไม่ถูกต้อง กรุณาลองใหม่อีกครั้ง', 'danger')
+            return redirect(url_for('login'))
+            
     return render_template('login.html')
 
 @app.route('/logout')
