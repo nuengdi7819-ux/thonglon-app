@@ -13,7 +13,7 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 app.secret_key = "thonglon_secret_key_security"
 
-# เชื่อมต่อฐานข้อมูล Supabase PostgreSQL
+# เชื่อมต่อฐานข้อมูล Supabase PostgreSQL (อัปเดตลิงก์พอร์ตและการเชื่อมต่อให้สมบูรณ์)
 app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://postgres:thonglon789@db.rzgtdsobqpnbbtvuyp.supabase.co:5432/postgres"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
