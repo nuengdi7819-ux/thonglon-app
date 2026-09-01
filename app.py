@@ -13,8 +13,8 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 app.secret_key = "thonglon_secret_key_security"
 
-# เชื่อมต่อฐานข้อมูล Supabase PostgreSQL (อัปเดตลิงก์พอร์ตและการเชื่อมต่อให้สมบูรณ์)
-app.config["SQLALCHEMY_DATABASE_URI"] = "postgresql://postgres:thonglon789@db.rzgtdsobqpnbbtvuyp.supabase.co:5432/postgres"
+# ใช้ SQLite เพื่อให้รันบน Render ได้ทันทีโดยไม่ติดปัญหา DNS Supabase
+app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///thonglon.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
@@ -33,14 +33,13 @@ class Transaction(db.Model):
     sales_name = db.Column(db.String(100), nullable=False)
     start_date = db.Column(db.Date, nullable=False, default=date.today)
     paid_interest = db.Column(db.Float, nullable=False, default=0.0)
-    status = db.Column(db.String(50), nullable=False, default='ปกติ') # 'ปกติ', 'ตัดยอดบางส่วน', 'คืนแล้ว'
+    status = db.Column(db.String(50), nullable=False, default='ปกติ')
 
     def to_dict(self):
         today = date.today()
         start = self.start_date if isinstance(self.start_date, date) else datetime.strptime(str(self.start_date), '%Y-%m-%d').date()
         days_passed = max(0, (today - start).days)
         
-        # คำนวณดอกเบี้ยสุทธิค้างชำระ
         gross_interest = days_passed * self.daily_interest
         accumulated_interest = max(0.0, gross_interest - self.paid_interest - self.discount)
         
@@ -60,11 +59,9 @@ class Transaction(db.Model):
             'status': self.status
         }
 
-# สร้างตารางในฐานข้อมูลอัตโนมัติหากยังไม่มี
 with app.app_context():
     db.create_all()
 
-# --- ฟังก์ชันช่วยเตรียมข้อมูลครบถ้วนสำหรับ HTML ทุกหน้า ---
 def get_dashboard_context(search_query=''):
     query = Transaction.query
     if search_query:
@@ -77,20 +74,17 @@ def get_dashboard_context(search_query=''):
     all_tx_models = query.order_by(Transaction.id.desc()).all()
     transactions = [tx.to_dict() for tx in all_tx_models]
     
-    # คำนวณยอดสรุปภาพรวม 3 กล่อง
     all_db_txs = Transaction.query.all()
     total_investment = sum(tx.principal for tx in all_db_txs if tx.status != 'คืนแล้ว')
     total_returned = sum(tx.principal for tx in all_db_txs if tx.status == 'คืนแล้ว')
     total_profit = sum(tx.paid_interest for tx in all_db_txs)
     
-    # รายชื่อลูกค้า และ แผนที่เบอร์โทรศัพท์สำหรับ JS Auto-fill
     all_customers = list(set(tx.customer_name for tx in all_db_txs if tx.customer_name))
     customer_phone_map = {}
     for tx in all_db_txs:
         if tx.customer_name and tx.phone:
             customer_phone_map[tx.customer_name] = tx.phone
 
-    # รายชื่อเซลส์ผู้ดูแล
     preset_sales = ['เซลล์ 1', 'เซลล์ 2', 'เซลล์ 3']
     db_sales = list(set(tx.sales_name for tx in all_db_txs if tx.sales_name))
     sales_list = list(set(preset_sales + db_sales))
@@ -106,8 +100,6 @@ def get_dashboard_context(search_query=''):
         'transactions': transactions,
         'search_query': search_query
     }
-
-# --- ROUTES ---
 
 @app.route('/', methods=['GET', 'POST'])
 def index():
