@@ -13,13 +13,11 @@ from flask_sqlalchemy import SQLAlchemy
 app = Flask(__name__)
 app.secret_key = "thonglon_secret_key_security"
 
-# ใช้ SQLite เพื่อให้รันบน Render ได้ทันทีโดยไม่ติดปัญหา DNS Supabase
 app.config["SQLALCHEMY_DATABASE_URI"] = "sqlite:///thonglon.db"
 app.config["SQLALCHEMY_TRACK_MODIFICATIONS"] = False
 
 db = SQLAlchemy(app)
 
-# --- โมเดลตารางข้อมูลธุรกรรม ---
 class Transaction(db.Model):
     __tablename__ = 'transactions'
     
@@ -85,7 +83,8 @@ def get_dashboard_context(search_query=''):
         if tx.customer_name and tx.phone:
             customer_phone_map[tx.customer_name] = tx.phone
 
-    preset_sales = ['เซลล์ 1', 'เซลล์ 2', 'เซลล์ 3']
+    # กำหนดเฉพาะ nueng และ nice
+    preset_sales = ['nueng', 'nice']
     db_sales = list(set(tx.sales_name for tx in all_db_txs if tx.sales_name))
     sales_list = list(set(preset_sales + db_sales))
 
@@ -149,6 +148,15 @@ def logout():
 def sales_members():
     search_query = request.args.get('search', '')
     context = get_dashboard_context(search_query)
+    
+    sales_groups = {}
+    for tx in context['transactions']:
+        s_name = tx.get('sales_name', 'ไม่ระบุเซลล์')
+        if s_name not in sales_groups:
+            sales_groups[s_name] = []
+        sales_groups[s_name].append(tx)
+        
+    context['sales_groups'] = sales_groups
     return render_template('sales_members.html', **context)
 
 @app.route('/all_members')
