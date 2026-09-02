@@ -44,24 +44,26 @@ BASE_LAYOUT = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>{{ title }} - ทองล้น</title>
+    <title>{{ title }} - ทองล้น (ธีมท้าวเวสสุวรรณ)</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Prompt', sans-serif; background-color: #f8f9fa; }
+        body { font-family: 'Prompt', sans-serif; background-color: #fcf6f0; }
         
-        /* Sidebar Desktop */
-        .sidebar { width: 260px; min-height: 100vh; background: #fff; border-right: 1px solid #dee2e6; position: fixed; top: 0; left: 0; z-index: 1050; transition: transform 0.3s ease-in-out; overflow-y: auto; }
+        /* ธีมสีแดง-ทอง ท้าวเวสสุวรรณ */
+        .sidebar { width: 260px; min-height: 100vh; background: #2c0b0e; border-right: 2px solid #d4af37; position: fixed; top: 0; left: 0; z-index: 1050; transition: transform 0.3s ease-in-out; overflow-y: auto; color: #f8f9fa; }
         .main-content { margin-left: 260px; padding: 25px; transition: margin 0.3s ease-in-out; }
         
-        .nav-link { color: #333; font-weight: 500; padding: 10px 15px; border-radius: 6px; margin-bottom: 4px; font-size: 0.95rem; white-space: nowrap; }
-        .nav-link:hover, .nav-link.active { background-color: #ffc107; color: #000; }
-        .sub-menu { padding-left: 25px; font-size: 0.9rem; }
+        .nav-link { color: #f1d3b2; font-weight: 500; padding: 10px 15px; border-radius: 6px; margin-bottom: 4px; font-size: 0.95rem; white-space: nowrap; }
+        .nav-link:hover, .nav-link.active { background-color: #d4af37; color: #2c0b0e; font-weight: 600; }
+        .sub-menu { padding-left: 25px; font-size: 0.9rem; color: #dfb182; }
 
-        .mobile-header { display: none; background: #fff; border-bottom: 1px solid #dee2e6; padding: 12px 15px; position: sticky; top: 0; z-index: 1040; }
-        .sidebar-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); z-index: 1045; }
+        .mobile-header { display: none; background: #2c0b0e; border-bottom: 2px solid #d4af37; color: #fff; padding: 12px 15px; position: sticky; top: 0; z-index: 1040; }
+        .sidebar-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.5); z-index: 1045; }
 
-        /* Responsive สำหรับมือถือ: ซ่อน Sidebar ไว้ด้านข้าง แล้วทำปุ่มกดสไลด์ */
+        .btn-warning { background-color: #d4af37; border-color: #d4af37; color: #2c0b0e; font-weight: 600; }
+        .btn-warning:hover { background-color: #b38f27; border-color: #b38f27; color: #fff; }
+
         @media (max-width: 992px) {
             .sidebar { transform: translateX(-100%); }
             .sidebar.show { transform: translateX(0); }
@@ -72,24 +74,26 @@ BASE_LAYOUT = """
     </style>
 </head>
 <body>
-    <!-- Mobile Top Bar -->
     <div class="mobile-header shadow-sm">
         <div class="d-flex align-items-center gap-2">
-            <button class="btn btn-outline-dark btn-sm" onclick="toggleSidebar()">☰ เมนู</button>
-            <h5 class="text-warning fw-bold mb-0">🪙 ทองล้น.com</h5>
+            <button class="btn btn-outline-warning btn-sm" onclick="toggleSidebar()">☰ เมนู</button>
+            <h5 class="text-warning fw-bold mb-0">🔱 ทองล้น (ท้าวเวสสุวรรณ)</h5>
         </div>
-        <a href="/logout" class="btn btn-outline-danger btn-sm">ออกจากระบบ</a>
+        <div class="d-flex align-items-center gap-2">
+            <span class="badge bg-warning text-dark">{{ session.get('admin') }}</span>
+            <a href="/logout" class="btn btn-outline-danger btn-sm">ออก</a>
+        </div>
     </div>
 
-    <!-- Backdrop สำหรับคลิกปิดเมนูมือถือ -->
     <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
 
-    <div class="sidebar p-3 d-flex flex-column shadow-sm" id="sidebarMenu">
+    <div class="sidebar p-3 d-flex flex-column shadow" id="sidebarMenu">
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <h4 class="text-warning fw-bold d-none d-lg-block">🪙 ทองล้น.com</h4>
-            <h5 class="text-warning fw-bold d-lg-none">🪙 เมนูหลัก</h5>
-            <button class="btn-close d-lg-none" onclick="toggleSidebar()"></button>
+            <h4 class="text-warning fw-bold d-none d-lg-block">🔱 ทองล้น.com</h4>
+            <h5 class="text-warning fw-bold d-lg-none">🔱 เมนูหลัก</h5>
+            <button class="btn-close btn-close-white d-lg-none" onclick="toggleSidebar()"></button>
         </div>
+        <div class="mb-3 px-2 d-none d-lg-block text-warning small border-bottom border-secondary pb-2">ผู้ใช้งาน: <b>{{ session.get('admin') }}</b></div>
         <ul class="nav nav-pills flex-column mb-auto">
             <li class="nav-item"><a href="/" class="nav-link {% if page == 'dashboard' %}active{% endif %}" onclick="toggleSidebar()">📊 Dashboard</a></li>
             <li><a href="/members" class="nav-link {% if page == 'members' %}active{% endif %}" onclick="toggleSidebar()">👥 1. สมาชิกทั้งหมด</a></li>
@@ -97,17 +101,18 @@ BASE_LAYOUT = """
             <li><a href="/customer_summary" class="nav-link {% if page == 'customer' %}active{% endif %}" onclick="toggleSidebar()">📂 3. สรุปลูกค้า</a></li>
             <li><a href="/customer_emergency" class="nav-link sub-menu {% if page == 'emergency' %}active{% endif %}" onclick="toggleSidebar()">🔸 3.1 เงินฉุกเฉิน</a></li>
             <li><a href="/customer_gold" class="nav-link sub-menu {% if page == 'gold' %}active{% endif %}" onclick="toggleSidebar()">🔸 3.2 ผ่อนทอง</a></li>
+            <li><a href="/customer_debt" class="nav-link sub-menu {% if page == 'debt' %}active{% endif %}" onclick="toggleSidebar()">🔸 3.3 ยอดค้างเก่า</a></li>
             <li><a href="/monthly_summary" class="nav-link {% if page == 'monthly' %}active{% endif %}" onclick="toggleSidebar()">📅 4. สรุปยอดรายเดือน</a></li>
         </ul>
-        <hr>
+        <hr class="border-secondary">
         <div class="d-flex flex-column gap-2">
-            <a href="/export_data" class="btn btn-outline-success btn-sm w-100">📥 สำรองข้อมูล (Backup)</a>
+            <a href="/export_data" class="btn btn-outline-warning btn-sm w-100">📥 สำรองข้อมูล (Backup)</a>
             <a href="/logout" class="btn btn-outline-danger w-100 d-none d-lg-block">ออกจากระบบ</a>
         </div>
     </div>
     
     <div class="main-content">
-        <h2 class="mb-4 text-dark fw-bold fs-4">{% block header %}{% endblock %}</h2>
+        <h2 class="mb-4 text-danger fw-bold fs-4">{% block header %}{% endblock %}</h2>
         {% block content %}{% endblock %}
     </div>
 
@@ -144,12 +149,16 @@ def index():
     if request.method == 'POST':
         try:
             p_val = float(request.form.get('principal', 0))
+            custom_start_date = request.form.get('start_date')
+            parsed_date = datetime.strptime(custom_start_date, '%Y-%m-%d').date() if custom_start_date else datetime.utcnow().date()
+            current_sales = session.get('admin', 'unknown')
+
             new_tx = Transaction(
                 type=request.form.get('type'),
                 customer_name=request.form.get('customer_name'),
                 phone=request.form.get('phone'),
-                sales_name=request.form.get('sales_name'),
-                start_date=datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date() if request.form.get('start_date') else datetime.utcnow().date(),
+                sales_name=current_sales,
+                start_date=parsed_date,
                 original_principal=p_val,
                 principal=p_val,
                 daily_interest=float(request.form.get('daily_interest', 0))
@@ -180,7 +189,7 @@ def index():
         tx.total_paid = (tx.original_principal - tx.principal) + tx.paid_interest
 
     all_txs = Transaction.query.all()
-    total_original_investment = sum(tx.original_principal for tx in all_txs)
+    total_original_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     total_current_principal = sum(tx.principal for tx in all_txs)
     total_profit = sum(tx.paid_interest for tx in all_txs)
 
@@ -199,7 +208,8 @@ def index():
         <tr>
             <td>{tx.customer_name}</td>
             <td>{tx.phone or '-'}</td>
-            <td>{tx.sales_name}</td>
+            <td><span class="badge bg-danger">{tx.sales_name}</span></td>
+            <td><span class="badge bg-secondary">{tx.type}</span></td>
             <td>{start_date_str}</td>
             <td>{last_pay_str}</td>
             <td>{tx.original_principal:,.2f}</td>
@@ -222,9 +232,9 @@ def index():
             <div class="modal-dialog">
                 <div class="modal-content">
                     <form action="/update_payment/{tx.id}" method="POST">
-                        <div class="modal-header">
+                        <div class="modal-header bg-danger text-white">
                             <h5 class="modal-title">จัดการยอด: {tx.customer_name}</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                            <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
                             <p class="text-muted mb-1">เงินต้นคงเหลือ: <b>{tx.principal:,.2f} บาท</b></p>
@@ -244,7 +254,7 @@ def index():
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
-                            <button type="submit" class="btn btn-dark">บันทึกการชำระ</button>
+                            <button type="submit" class="btn btn-warning">บันทึกการชำระ</button>
                         </div>
                     </form>
                 </div>
@@ -255,33 +265,34 @@ def index():
     content = f"""
     <div class="row mb-4">
         <div class="col-md-4 mb-3">
-            <div class="card p-3 shadow-sm bg-warning text-dark">
-                <h5>เงินลงทุนทั้งหมด</h5>
+            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #b30000, #ff4d4d);">
+                <h5>🔱 เงินลงทุนทั้งหมด</h5>
                 <h3>{total_original_investment:,.2f} บาท</h3>
             </div>
         </div>
         <div class="col-md-4 mb-3">
-            <div class="card p-3 shadow-sm bg-info text-dark">
-                <h5>เงินต้นคงค้าง</h5>
+            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #004d99, #3399ff);">
+                <h5>💼 เงินต้นคงค้าง</h5>
                 <h3>{total_current_principal:,.2f} บาท</h3>
             </div>
         </div>
         <div class="col-md-4 mb-3">
-            <div class="card p-3 shadow-sm bg-success text-white">
-                <h5>กำไรสะสมทั้งหมด</h5>
-                <h3>{total_profit:,.2f} บาท</h3>
+            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #b38f00, #ffcc00);">
+                <h5 class="text-dark">💰 กำไรสะสมทั้งหมด</h5>
+                <h3 class="text-dark">{total_profit:,.2f} บาท</h3>
             </div>
         </div>
     </div>
 
-    <div class="card p-4 shadow-sm mb-4">
-        <h4 class="mb-3 fs-5">➕ เพิ่มรายการใหม่</h4>
+    <div class="card p-4 shadow-sm mb-4 border-warning">
+        <h4 class="mb-3 fs-5 text-danger fw-bold">➕ เพิ่มรายการใหม่ (ผู้ดูแล: <span class="text-dark">{session.get('admin')}</span>)</h4>
         <form method="POST" class="row g-3">
             <div class="col-md-3">
-                <label class="form-label">ประเภท</label>
+                <label class="form-label">ประเภทรายการ</label>
                 <select name="type" class="form-select" required>
-                    <option value="เงินฉุกเฉิน">เงินฉุกเฉิน</option>
-                    <option value="ผ่อนทอง">ผ่อนทอง</option>
+                    <option value="เงินฉุกเฉิน">เงินฉุกเฉิน (ลูกค้าใหม่)</option>
+                    <option value="ผ่อนทอง">ผ่อนทอง (ลูกค้าใหม่)</option>
+                    <option value="ยอดค้างเก่า">ยอดค้างเก่า (ลูกค้าเก่า)</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -293,45 +304,39 @@ def index():
                 <input type="text" name="phone" class="form-control">
             </div>
             <div class="col-md-3">
-                <label class="form-label">เซลล์ผู้ดูแล</label>
-                <select name="sales_name" class="form-select" required>
-                    <option value="nueng">nueng</option>
-                    <option value="nice">nice</option>
-                </select>
-            </div>
-            <div class="col-md-3">
-                <label class="form-label">วันที่เริ่ม (วันที่กู้)</label>
+                <label class="form-label">วันที่กู้ (เลือกย้อนหลังได้)</label>
                 <input type="date" name="start_date" class="form-control" value="{datetime.now().strftime('%Y-%m-%d')}" required>
             </div>
-            <div class="col-md-3">
-                <label class="form-label">เงินต้น (บาท)</label>
+            <div class="col-md-4">
+                <label class="form-label">ยอดเงินต้น/ยอดค้าง (บาท)</label>
                 <input type="number" step="any" name="principal" class="form-control" required>
             </div>
-            <div class="col-md-3">
+            <div class="col-md-4">
                 <label class="form-label">ดอกเบี้ย/วัน (บาท)</label>
                 <input type="number" step="any" name="daily_interest" class="form-control" required>
             </div>
-            <div class="col-md-3 d-flex align-items-end">
-                <button type="submit" class="btn btn-dark w-100">บันทึกข้อมูล</button>
+            <div class="col-md-4 d-flex align-items-end">
+                <button type="submit" class="btn btn-warning w-100">บันทึกข้อมูลมงคล</button>
             </div>
         </form>
     </div>
 
-    <div class="card p-4 shadow-sm">
+    <div class="card p-4 shadow-sm border-warning">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <h4 class="mb-0 fs-5">📋 รายการทั้งหมด</h4>
+            <h4 class="mb-0 fs-5 text-danger fw-bold">📋 รายการทั้งหมด</h4>
             <form method="GET" class="d-flex">
                 <input type="text" name="search" class="form-control form-control-sm me-2" placeholder="ค้นหาชื่อ หรือเบอร์โทร..." value="{search_query}">
-                <button type="submit" class="btn btn-sm btn-outline-dark">ค้นหา</button>
+                <button type="submit" class="btn btn-sm btn-outline-danger">ค้นหา</button>
             </form>
         </div>
         <div class="table-responsive">
             <table class="table table-striped align-middle text-nowrap">
-                <thead>
+                <thead class="table-dark">
                     <tr>
                         <th>ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
                         <th>เซลล์</th>
+                        <th>ประเภท</th>
                         <th>วันที่กู้</th>
                         <th>ชำระล่าสุด</th>
                         <th>เงินลงทุน</th>
@@ -345,14 +350,14 @@ def index():
                     </tr>
                 </thead>
                 <tbody>
-                    {rows if rows else "<tr><td colspan='13' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
+                    {rows if rows else "<tr><td colspan='14' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
                 </tbody>
             </table>
         </div>
     </div>
     """
 
-    html = BASE_LAYOUT.replace('{% block header %}Dashboard{% endblock %}', 'Dashboard บริหารจัดการระบบ')
+    html = BASE_LAYOUT.replace('{% block header %}Dashboard{% endblock %}', '🔱 Dashboard บริหารจัดการ (ธีมท้าวเวสสุวรรณ)')
     html = html.replace('{% block content %}{% endblock %}', content)
     return render_template_string(html, title="Dashboard", page="dashboard")
 
@@ -373,7 +378,7 @@ def export_data():
     output.write(si.getvalue().encode('utf-8-sig'))
     output.seek(0)
     
-    filename = f"thonglon_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"thonglon_wessuwan_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     return send_file(output, mimetype='text/csv', as_attachment=True, download_name=filename)
 
 @app.route('/update_payment/<int:tx_id>', methods=['POST'])
@@ -441,7 +446,8 @@ def members():
         <tr>
             <td>{t.customer_name}</td>
             <td>{t.phone or '-'}</td>
-            <td>{t.sales_name}</td>
+            <td><span class="badge bg-danger">{t.sales_name}</span></td>
+            <td><span class="badge bg-secondary">{t.type}</span></td>
             <td>{t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
@@ -451,12 +457,14 @@ def members():
         """
     
     content = f"""
-    <div class="card p-4 shadow-sm">
-        <h4 class="mb-3 fs-5">รายชื่อสมาชิกทั้งหมด</h4>
+    <div class="card p-4 shadow-sm border-warning">
+        <h4 class="mb-3 fs-5 text-danger fw-bold">👥 รายชื่อสมาชิกทั้งหมด</h4>
         <div class="table-responsive">
-            <table class="table table-striped text-nowrap">
-                <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เซลล์ผู้ดูแล</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
-                <tbody>{rows if rows else "<tr><td colspan='8' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
+            <table class="table table-striped text-nowrap align-middle">
+                <thead class="table-dark">
+                    <tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เซลล์ผู้ดูแล</th><th>ประเภท</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr>
+                </thead>
+                <tbody>{rows if rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
             </table>
         </div>
     </div>
@@ -485,6 +493,7 @@ def sales_members():
             <tr>
                 <td>{t.customer_name}</td>
                 <td>{t.phone or '-'}</td>
+                <td><span class="badge bg-secondary">{t.type}</span></td>
                 <td>{t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'}</td>
                 <td>{t.original_principal:,.2f}</td>
                 <td>{t.principal:,.2f}</td>
@@ -493,12 +502,12 @@ def sales_members():
             </tr>
             """
         sales_content += f"""
-        <div class="card mb-4 shadow-sm">
-            <div class="card-header bg-dark text-white"><h5 class="mb-0 fs-6">เซลล์: {sales}</h5></div>
+        <div class="card mb-4 shadow-sm border-warning">
+            <div class="card-header bg-danger text-white"><h5 class="mb-0 fs-6">🔱 เซลล์ผู้ดูแล: {sales}</h5></div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped text-nowrap">
-                        <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
+                    <table class="table table-striped text-nowrap align-middle">
+                        <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>ประเภท</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
                         <tbody>{sub_rows}</tbody>
                     </table>
                 </div>
@@ -524,7 +533,7 @@ def customer_summary():
         <tr>
             <td>{t.customer_name}</td>
             <td>{t.phone or '-'}</td>
-            <td>{t.sales_name}</td>
+            <td><span class="badge bg-danger">{t.sales_name}</span></td>
             <td>{t.type}</td>
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
@@ -536,11 +545,11 @@ def customer_summary():
         """
 
     content = f"""
-    <div class="card p-4 shadow-sm">
-        <h4 class="mb-3 fs-5">สรุปข้อมูลลูกค้าทั้งหมด</h4>
+    <div class="card p-4 shadow-sm border-warning">
+        <h4 class="mb-3 fs-5 text-danger fw-bold">📂 สรุปข้อมูลลูกค้าทั้งหมด</h4>
         <div class="table-responsive">
             <table class="table table-striped align-middle text-nowrap">
-                <thead>
+                <thead class="table-dark">
                     <tr>
                         <th>ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
@@ -578,7 +587,7 @@ def customer_emergency():
         <tr>
             <td>{t.customer_name}</td>
             <td>{t.phone or '-'}</td>
-            <td>{t.sales_name}</td>
+            <td><span class="badge bg-danger">{t.sales_name}</span></td>
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
@@ -589,11 +598,11 @@ def customer_emergency():
         """
 
     content = f"""
-    <div class="card p-4 shadow-sm">
-        <h4 class="mb-3 fs-5">สรุปข้อมูลลูกค้า: เงินฉุกเฉิน</h4>
+    <div class="card p-4 shadow-sm border-warning">
+        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: เงินฉุกเฉิน (ลูกค้าใหม่)</h4>
         <div class="table-responsive">
             <table class="table table-striped align-middle text-nowrap">
-                <thead>
+                <thead class="table-dark">
                     <tr>
                         <th>ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
@@ -630,7 +639,7 @@ def customer_gold():
         <tr>
             <td>{t.customer_name}</td>
             <td>{t.phone or '-'}</td>
-            <td>{t.sales_name}</td>
+            <td><span class="badge bg-danger">{t.sales_name}</span></td>
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
@@ -641,11 +650,11 @@ def customer_gold():
         """
 
     content = f"""
-    <div class="card p-4 shadow-sm">
-        <h4 class="mb-3 fs-5">สรุปข้อมูลลูกค้า: ผ่อนทอง</h4>
+    <div class="card p-4 shadow-sm border-warning">
+        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: ผ่อนทอง (ลูกค้าใหม่)</h4>
         <div class="table-responsive">
             <table class="table table-striped align-middle text-nowrap">
-                <thead>
+                <thead class="table-dark">
                     <tr>
                         <th>ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
@@ -668,59 +677,137 @@ def customer_gold():
     html = BASE_LAYOUT.replace('{% block header %}3.2 ผ่อนทอง{% endblock %}', 'ผ่อนทอง').replace('{% block content %}{% endblock %}', content)
     return render_template_string(html, title="ผ่อนทอง", page="gold")
 
+@app.route('/customer_debt')
+def customer_debt():
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+    
+    txs = Transaction.query.filter_by(type='ยอดค้างเก่า').all()
+    customer_rows = ""
+    for t in txs:
+        start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
+        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        customer_rows += f"""
+        <tr>
+            <td>{t.customer_name}</td>
+            <td>{t.phone or '-'}</td>
+            <td><span class="badge bg-danger">{t.sales_name}</span></td>
+            <td>{start_str}</td>
+            <td>{t.original_principal:,.2f}</td>
+            <td>{t.principal:,.2f}</td>
+            <td><strong>{total_paid:,.2f}</strong></td>
+            <td>{t.paid_interest:,.2f}</td>
+            <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
+        </tr>
+        """
+
+    content = f"""
+    <div class="card p-4 shadow-sm border-warning">
+        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: ยอดค้างเก่า (ลูกค้าเก่า)</h4>
+        <div class="table-responsive">
+            <table class="table table-striped align-middle text-nowrap">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ชื่อลูกค้า</th>
+                        <th>เบอร์โทร</th>
+                        <th>เซลล์ผู้ดูแล</th>
+                        <th>วันที่เริ่ม</th>
+                        <th>ยอดค้างตั้งต้น</th>
+                        <th>ยอดค้างคงเหลือ</th>
+                        <th>เก็บเงินได้แล้ว</th>
+                        <th>ดอกเบี้ยสะสม</th>
+                        <th>สถานะ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {customer_rows if customer_rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลยอดค้างเก่า</td></tr>"}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+    html = BASE_LAYOUT.replace('{% block header %}3.3 ยอดค้างเก่า{% endblock %}', 'ยอดค้างเก่า').replace('{% block content %}{% endblock %}', content)
+    return render_template_string(html, title="ยอดค้างเก่า", page="debt")
+
 @app.route('/monthly_summary')
 def monthly_summary():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
     all_txs = Transaction.query.all()
-    monthly_data = defaultdict(lambda: {'count': 0, 'investment': 0.0, 'profit': 0.0, 'pending': 0.0})
+    monthly_data = defaultdict(lambda: {'count': 0, 'new_investment': 0.0, 'debt_start': 0.0, 'profit': 0.0, 'new_paid': 0.0, 'debt_paid': 0.0})
     
-    today = datetime.now().date()
     for tx in all_txs:
         if tx.start_date:
             ym = tx.start_date.strftime('%Y-%m')
             monthly_data[ym]['count'] += 1
-            monthly_data[ym]['investment'] += tx.original_principal
+            collected_amount = (tx.original_principal - tx.principal) + tx.paid_interest
+
+            if tx.type == 'ยอดค้างเก่า':
+                monthly_data[ym]['debt_start'] += tx.original_principal
+                monthly_data[ym]['debt_paid'] += collected_amount
+            else:
+                monthly_data[ym]['new_investment'] += tx.original_principal
+                monthly_data[ym]['new_paid'] += collected_amount
+
             monthly_data[ym]['profit'] += tx.paid_interest
-            
-            days = (today - tx.start_date).days
-            if days < 1:
-                days = 1
-            acc = (tx.daily_interest * days) - tx.paid_interest
-            pending_interest = acc if acc > 0 else 0.0
-            monthly_data[ym]['pending'] += (tx.principal + pending_interest)
 
     sorted_months = sorted(monthly_data.keys(), reverse=True)
+    
     monthly_rows = ""
-    for ym in sorted_months:
+    for i, ym in enumerate(sorted_months):
         d = monthly_data[ym]
+        total_collected = d['new_paid'] + d['debt_paid']
+        
+        diff_str = "-"
+        if i + 1 < len(sorted_months):
+            prev_ym = sorted_months[i + 1]
+            prev_d = monthly_data[prev_ym]
+            prev_total = prev_d['new_paid'] + prev_d['debt_paid']
+            diff = total_collected - prev_total
+            if prev_total > 0:
+                pct = (diff / prev_total) * 100
+                if diff >= 0:
+                    diff_str = f'<span class="text-success">▲ +{diff:,.2f} (+{pct:.1f}%)</span>'
+                else:
+                    diff_str = f'<span class="text-danger">▼ {diff:,.2f} ({pct:.1f}%)</span>'
+            else:
+                diff_str = f'<span class="text-success">▲ +{diff:,.2f}</span>'
+
         monthly_rows += f"""
         <tr>
-            <td>{ym}</td>
+            <td><b>{ym}</b></td>
             <td>{d['count']} รายการ</td>
-            <td>{d['investment']:,.2f}</td>
-            <td>{d['profit']:,.2f}</td>
-            <td>{d['pending']:,.2f}</td>
+            <td class="text-primary">{d['new_investment']:,.2f}</td>
+            <td class="text-success">{d['new_paid']:,.2f}</td>
+            <td class="text-danger">{d['debt_start']:,.2f}</td>
+            <td class="text-success">{d['debt_paid']:,.2f}</td>
+            <td class="fw-bold">{total_collected:,.2f}</td>
+            <td>{diff_str}</td>
+            <td class="text-warning text-dark fw-bold">{d['profit']:,.2f}</td>
         </tr>
         """
 
     content = f"""
-    <div class="card p-4 shadow-sm">
-        <h4 class="mb-3 fs-5">สรุปยอดผลประกอบการรายเดือน</h4>
+    <div class="card p-4 shadow-sm border-warning mb-4">
+        <h4 class="mb-3 fs-5 text-danger fw-bold">📊 สรุปยอดผลประกอบการรายเดือน (เปรียบเทียบเชิงลึก)</h4>
         <div class="table-responsive">
-            <table class="table table-bordered text-nowrap">
+            <table class="table table-bordered text-nowrap align-middle">
                 <thead class="table-dark">
                     <tr>
-                        <th>ประจำเดือน (Year-Month)</th>
-                        <th>จำนวนรายการ</th>
-                        <th>ทุนที่ใช้เดือนนี้ (บาท)</th>
-                        <th>กำไรเดือนนี้ (บาท)</th>
-                        <th>ยอดรอเก็บรวม (บาท)</th>
+                        <th>ประจำเดือน</th>
+                        <th>รายการ</th>
+                        <th>ทุนลูกค้าใหม่</th>
+                        <th>เก็บลูกค้าใหม่ได้</th>
+                        <th>ยอดค้างเก่าตั้งต้น</th>
+                        <th>เก็บยอดค้างเก่าได้</th>
+                        <th>รวมยอดเก็บได้ทั้งหมด</th>
+                        <th>เปรียบเทียบ vs เดือนก่อน</th>
+                        <th>กำไรสะสมรวม</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {monthly_rows if monthly_rows else "<tr><td colspan='5' class='text-center text-muted'>ยังไม่มีข้อมูลสรุปยอดรายเดือน</td></tr>"}
+                    {monthly_rows if monthly_rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลสรุปยอดรายเดือน</td></tr>"}
                 </tbody>
             </table>
         </div>
@@ -748,14 +835,18 @@ def login():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>เข้าสู่ระบบ - ทองล้น</title>
+        <title>เข้าสู่ระบบ - ทองล้น (ธีมท้าวเวสสุวรรณ)</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
-        <style>body { font-family: 'Prompt', sans-serif; background-color: #f8f9fa; }</style>
+        <style>
+            body { font-family: 'Prompt', sans-serif; background: linear-gradient(135deg, #2c0b0e, #1a0507); color: #fff; }
+            .card { background-color: #fff; color: #333; border: 2px solid #d4af37; }
+        </style>
     </head>
     <body class="d-flex align-items-center justify-content-center vh-100 p-3">
-        <div class="card p-4 shadow w-100" style="max-width: 380px;">
-            <h3 class="text-center mb-4 text-warning fw-bold">🪙 ทองล้น</h3>
+        <div class="card p-4 shadow-lg w-100" style="max-width: 380px;">
+            <h3 class="text-center mb-2 text-danger fw-bold">🔱 ทองล้น</h3>
+            <p class="text-center text-muted small mb-4">ระบบบริหารจัดการ (ธีมท้าวเวสสุวรรณ)</p>
             {% if error %}<div class="alert alert-danger py-2 text-center">{{ error }}</div>{% endif %}
             <form method="POST">
                 <div class="mb-3"><label class="form-label">ชื่อผู้ใช้งาน:</label><input type="text" name="username" class="form-control" required></div>
