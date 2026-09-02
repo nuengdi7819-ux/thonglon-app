@@ -160,8 +160,10 @@ def index():
             <td>{tx.accumulated_interest:,.2f}</td>
             <td><span class="badge {badge_color}">{tx.status}</span></td>
             <td>
-                <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#payModal{tx.id}">จัดการยอด</button>
-                <a href="/delete_tx/{tx.id}" class="btn btn-sm btn-danger" onclick="return confirm('ยืนยันการลบ?')">ลบ</a>
+                <div class="d-flex flex-column gap-2" style="width: 90px;">
+                    <button type="button" class="btn btn-sm btn-warning w-100" data-bs-toggle="modal" data-bs-target="#payModal{tx.id}">จัดการยอด</button>
+                    <a href="/delete_tx/{tx.id}" class="btn btn-sm btn-danger w-100" onclick="return confirm('ยืนยันการลบ?')">ลบ</a>
+                </div>
             </td>
         </tr>
 
