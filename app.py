@@ -7,6 +7,12 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///thonglon.db'
 app.config['SECRET_KEY'] = 'your_secret_key'
 db = SQLAlchemy(app)
 
+# กำหนดรายชื่อผู้ใช้งานและรหัสผ่านที่ถูกต้อง
+VALID_USERS = {
+    'nueng': '909090',
+    'nice': '022540'
+}
+
 class Transaction(db.Model):
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(50), nullable=False)
@@ -47,7 +53,7 @@ def index():
     all_txs = Transaction.query.all()
     total_investment = sum(tx.principal for tx in all_txs if tx.status != 'คืนแล้ว')
     total_profit = sum(tx.paid_interest for tx in all_txs)
-    total_returned = sum(tx.paid_interest for tx in all_txs) # หรือปรับตามยอดคืนจริง
+    total_returned = sum(tx.paid_interest for tx in all_txs)
 
     customers = db.session.query(Transaction.customer_name, Transaction.phone).distinct().all()
     all_customers = [c[0] for c in customers]
@@ -118,31 +124,18 @@ def delete_tx(tx_id):
 
 @app.route('/login', methods=['GET', 'POST'])
 def login():
+    error = None
     if request.method == 'POST':
-        session['admin'] = request.form.get('username', 'Admin')
-        return redirect(url_for('index'))
-    return """
-    <!DOCTYPE html>
-    <html lang="th">
-    <head>
-        <meta charset="UTF-8">
-        <title>เข้าสู่ระบบ - ทองล้น</title>
-        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
-    </head>
-    <body class="bg-light d-flex align-items-center justify-content-center vh-100">
-        <div class="card p-4 shadow" style="width: 350px;">
-            <h3 class="text-center mb-3">🏢 ระบบทองล้น</h3>
-            <form method="POST">
-                <div class="mb-3">
-                    <label class="form-label">ชื่อผู้ใช้งาน:</label>
-                    <input type="text" name="username" class="form-control" value="Admin" required>
-                </div>
-                <button type="submit" class="btn btn-dark w-100">เข้าสู่ระบบ</button>
-            </form>
-        </div>
-    </body>
-    </html>
-    """
+        username = request.form.get('username', '').strip()
+        password = request.form.get('password', '').strip()
+        
+        if username in VALID_USERS and VALID_USERS[username] == password:
+            session['admin'] = username
+            return redirect(url_for('index'))
+        else:
+            error = 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง!'
+            
+    return render_template('login.html', error=error)
 
 @app.route('/logout')
 def logout():
