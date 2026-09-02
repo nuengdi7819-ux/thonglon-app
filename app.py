@@ -35,7 +35,7 @@ class Transaction(db.Model):
     daily_interest = db.Column(db.Float, nullable=False)
     paid_interest = db.Column(db.Float, default=0.0)     
     status = db.Column(db.String(20), default='ปกติ')
-    installment_amount = db.Column(db.Float, default=0.0) # เพิ่มช่องเก็บยอดชำระต่องวดสำหรับยอดค้างเก่า
+    installment_amount = db.Column(db.Float, default=0.0)
 
 with app.app_context():
     db.create_all()
@@ -226,6 +226,7 @@ def index():
         start_date_str = tx.start_date.strftime('%d/%m/%Y') if tx.start_date else '-'
         last_pay_str = tx.last_payment_date.strftime('%d/%m/%Y') if tx.last_payment_date else '-'
 
+        # เพิ่มช่องส่วนลดใน Modal จัดการยอดชำระ
         if tx.type == 'ยอดค้างเก่า':
             display_daily_interest = '-'
             display_days = '-'
@@ -241,8 +242,12 @@ def index():
                                 </select>
                             </div>
                             <div class="mb-3" id="amountDiv{tx.id}">
-                                <label class="form-label">จำนวนเงินที่ชำระ (เข้ากำไรสะสมทันที) (บาท)</label>
+                                <label class="form-label">จำนวนเงินที่รับชำระจริง (บาท)</label>
                                 <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-danger">ส่วนลด (ถ้ามี / บาท)</label>
+                                <input type="number" step="any" name="discount_amount" class="form-control" value="0" placeholder="กรอกส่วนลด">
                             </div>
             """
         else:
@@ -261,8 +266,12 @@ def index():
                                 </select>
                             </div>
                             <div class="mb-3" id="amountDiv{tx.id}">
-                                <label class="form-label">จำนวนเงินที่รับชำระ (บาท)</label>
+                                <label class="form-label">จำนวนเงินที่รับชำระจริง (บาท)</label>
                                 <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-danger">ส่วนลด (ถ้ามี / บาท)</label>
+                                <input type="number" step="any" name="discount_amount" class="form-control" value="0" placeholder="กรอกส่วนลด">
                             </div>
             """
 
@@ -446,18 +455,25 @@ def update_payment(tx_id):
     tx = Transaction.query.get_or_404(tx_id)
     payment_type = request.form.get('payment_type')
     today = datetime.now().date()
+    discount_amt = float(request.form.get('discount_amount', 0)) # รับค่าส่วนลด
     
     if tx.type == 'ยอดค้างเก่า':
         if payment_type == 'full':
-            pay_amount = tx.principal
+            pay_amount = tx.principal # ปิดยอด ตัดออกทั้งหมด
+            discount_amt = 0.0
         else:
             pay_amount = float(request.form.get('pay_amount', 0))
             
-        if pay_amount > tx.principal:
-            pay_amount = tx.principal
+        total_reduction = pay_amount + discount_amt
+        if total_reduction > tx.principal:
+            total_reduction = tx.principal
+            pay_amount = tx.principal - discount_amt
+            if pay_amount < 0:
+                pay_amount = 0.0
             
-        tx.paid_interest += pay_amount
-        tx.principal -= pay_amount
+        tx.paid_interest += pay_amount # บันทึกเฉพาะเงินสดที่ได้รับจริงเข้ากำไร
+        tx.principal -= total_reduction # ตัดยอดหนี้ออกเต็มจำนวน (เงินสด + ส่วนลด)
+        
         if tx.principal <= 0:
             tx.principal = 0.0
             tx.status = 'คืนแล้ว'
@@ -473,20 +489,31 @@ def update_payment(tx_id):
             total_acc_interest = 0.0
 
         if payment_type == 'full':
-            tx.paid_interest += total_acc_interest
+            pay_amount = total_acc_interest
+            principal_reduction = tx.principal
+            discount_amt = 0.0
+            tx.paid_interest += pay_amount
             tx.principal = 0.0
             tx.status = 'คืนแล้ว'
         else:
             pay_amount = float(request.form.get('pay_amount', 0))
+            total_reduction = pay_amount + discount_amt
+            
             if pay_amount >= total_acc_interest:
-                remainder = pay_amount - total_acc_interest
-                tx.paid_interest += total_acc_interest
+                interest_paid = total_acc_interest
+                remainder = total_reduction - total_acc_interest
+                tx.paid_interest += interest_paid
                 if remainder > 0:
                     tx.principal -= remainder
                     if tx.principal < 0:
                         tx.principal = 0.0
             else:
                 tx.paid_interest += pay_amount
+                # ถ้ามีส่วนลดช่วยตัดต้นด้วย
+                if discount_amt > 0:
+                    tx.principal -= discount_amt
+                    if tx.principal < 0:
+                        tx.principal = 0.0
                 
             if tx.principal <= 0:
                 tx.status = 'คืนแล้ว'
@@ -762,7 +789,6 @@ def customer_debt():
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         total_paid = t.original_principal - t.principal
         
-        # คำนวณงวดทั้งหมดและงวดที่เหลือ
         total_installments = 0
         remaining_installments = 0
         if t.installment_amount and t.installment_amount > 0:
