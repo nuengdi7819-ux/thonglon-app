@@ -205,7 +205,6 @@ def index():
         <tr>
             <td>{tx.customer_name}</td>
             <td>{tx.phone or '-'}</td>
-            <td><span class="badge bg-danger">{tx.sales_name}</span></td>
             <td><span class="badge bg-secondary">{tx.type}</span></td>
             <td>{start_date_str}</td>
             <td>{last_pay_str}</td>
@@ -262,21 +261,21 @@ def index():
     content = f"""
     <div class="row mb-4">
         <div class="col-md-4 mb-3">
-            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #b30000, #ff4d4d);">
+            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #004d99, #3399ff);">
                 <h5>🔱 เงินลงทุนทั้งหมด</h5>
                 <h3>{total_original_investment:,.2f} บาท</h3>
             </div>
         </div>
         <div class="col-md-4 mb-3">
-            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #004d99, #3399ff);">
+            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #b30000, #ff4d4d);">
                 <h5>💼 เงินต้นคงค้าง</h5>
                 <h3>{total_current_principal:,.2f} บาท</h3>
             </div>
         </div>
         <div class="col-md-4 mb-3">
-            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #b38f00, #ffcc00);">
-                <h5 class="text-dark">💰 กำไรสะสมทั้งหมด</h5>
-                <h3 class="text-dark">{total_profit:,.2f} บาท</h3>
+            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #006622, #00b33c);">
+                <h5>💰 กำไรสะสมทั้งหมด</h5>
+                <h3>{total_profit:,.2f} บาท</h3>
             </div>
         </div>
     </div>
@@ -313,7 +312,7 @@ def index():
                 <input type="number" step="any" name="daily_interest" class="form-control" required>
             </div>
             <div class="col-md-4 d-flex align-items-end">
-                <button type="submit" class="btn btn-warning w-100">บันทึกข้อมูลมงคล</button>
+                <button type="submit" class="btn btn-success w-100 fw-bold">บันทึกข้อมูล</button>
             </div>
         </form>
     </div>
@@ -332,7 +331,6 @@ def index():
                     <tr>
                         <th>ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
-                        <th>เซลล์</th>
                         <th>ประเภท</th>
                         <th>วันที่กู้</th>
                         <th>ชำระล่าสุด</th>
@@ -347,7 +345,7 @@ def index():
                     </tr>
                 </thead>
                 <tbody>
-                    {rows if rows else "<tr><td colspan='14' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
+                    {rows if rows else "<tr><td colspan='13' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
                 </tbody>
             </table>
         </div>
