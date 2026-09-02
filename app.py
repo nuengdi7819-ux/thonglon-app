@@ -5,6 +5,7 @@ from collections import defaultdict
 import os
 import io
 import csv
+import math
 
 app = Flask(__name__)
 
@@ -34,6 +35,7 @@ class Transaction(db.Model):
     daily_interest = db.Column(db.Float, nullable=False)
     paid_interest = db.Column(db.Float, default=0.0)     
     status = db.Column(db.String(20), default='ปกติ')
+    installment_amount = db.Column(db.Float, default=0.0) # เพิ่มช่องเก็บยอดชำระต่องวดสำหรับยอดค้างเก่า
 
 with app.app_context():
     db.create_all()
@@ -133,6 +135,16 @@ BASE_LAYOUT = """
             }
         }
     }
+
+    function handleTypeChange() {
+        let typeVal = document.getElementById('txTypeSelect').value;
+        let instDiv = document.getElementById('installmentDiv');
+        if (typeVal === 'ยอดค้างเก่า') {
+            instDiv.style.display = 'block';
+        } else {
+            instDiv.style.display = 'none';
+        }
+    }
     </script>
 </body>
 </html>
@@ -150,16 +162,22 @@ def index():
             parsed_date = datetime.strptime(custom_start_date, '%Y-%m-%d').date() if custom_start_date else datetime.utcnow().date()
             current_sales = session.get('admin', 'unknown')
             d_interest = float(request.form.get('daily_interest', 0))
+            tx_type = request.form.get('type')
+            
+            inst_amt = 0.0
+            if tx_type == 'ยอดค้างเก่า':
+                inst_amt = float(request.form.get('installment_amount', 0))
 
             new_tx = Transaction(
-                type=request.form.get('type'),
+                type=tx_type,
                 customer_name=request.form.get('customer_name'),
                 phone=request.form.get('phone'),
                 sales_name=current_sales,
                 start_date=parsed_date,
                 original_principal=p_val,
                 principal=p_val,
-                daily_interest=d_interest
+                daily_interest=d_interest,
+                installment_amount=inst_amt
             )
             db.session.add(new_tx)
             db.session.commit()
@@ -325,7 +343,7 @@ def index():
         <form method="POST" class="row g-3">
             <div class="col-md-3">
                 <label class="form-label">ประเภทรายการ</label>
-                <select name="type" class="form-select" required>
+                <select name="type" class="form-select" id="txTypeSelect" onchange="handleTypeChange()" required>
                     <option value="เงินฉุกเฉิน">เงินฉุกเฉิน (ลูกค้าใหม่)</option>
                     <option value="ผ่อนทอง">ผ่อนทอง (ลูกค้าใหม่)</option>
                     <option value="ยอดค้างเก่า">ยอดค้างเก่า (ลูกค้าเก่า)</option>
@@ -344,8 +362,12 @@ def index():
                 <input type="date" name="start_date" class="form-control" value="{datetime.now().strftime('%Y-%m-%d')}" required>
             </div>
             <div class="col-md-4">
-                <label class="form-label">ยอดเงินต้น/ยอดค้าง (บาท)</label>
+                <label class="form-label">ยอดเงินต้น/ยอดค้างทั้งหมด (บาท)</label>
                 <input type="number" step="any" name="principal" class="form-control" required>
+            </div>
+            <div class="col-md-4" id="installmentDiv" style="display: none;">
+                <label class="form-label text-danger fw-bold">ยอดชำระต่องวด (บาท)</label>
+                <input type="number" step="any" name="installment_amount" class="form-control" value="0" placeholder="เช่น 5714">
             </div>
             <div class="col-md-4">
                 <label class="form-label">ดอกเบี้ย/วัน (สำหรับยอดค้างเก่าใส่ 0)</label>
@@ -403,11 +425,11 @@ def export_data():
     
     si = io.StringIO()
     cw = csv.writer(si)
-    cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status'])
+    cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status', 'InstallmentAmount'])
     
     txs = Transaction.query.all()
     for t in txs:
-        cw.writerow([t.id, t.type, t.customer_name, t.phone, t.sales_name, t.start_date, t.original_principal, t.principal, t.daily_interest, t.paid_interest, t.status])
+        cw.writerow([t.id, t.type, t.customer_name, t.phone, t.sales_name, t.start_date, t.original_principal, t.principal, t.daily_interest, t.paid_interest, t.status, t.installment_amount])
     
     output = io.BytesIO()
     output.write(si.getvalue().encode('utf-8-sig'))
@@ -739,6 +761,17 @@ def customer_debt():
     for t in txs:
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         total_paid = t.original_principal - t.principal
+        
+        # คำนวณงวดทั้งหมดและงวดที่เหลือ
+        total_installments = 0
+        remaining_installments = 0
+        if t.installment_amount and t.installment_amount > 0:
+            total_installments = math.ceil(t.original_principal / t.installment_amount)
+            remaining_installments = math.ceil(t.principal / t.installment_amount)
+            installment_info = f"{remaining_installments} / {total_installments} งวด"
+        else:
+            installment_info = "-"
+
         customer_rows += f"""
         <tr>
             <td>{t.customer_name}</td>
@@ -748,6 +781,7 @@ def customer_debt():
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
+            <td class="text-danger fw-bold">{installment_info}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
@@ -755,7 +789,7 @@ def customer_debt():
 
     content = f"""
     <div class="card p-4 shadow-sm border-warning">
-        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: ยอดค้างเก่า (ลูกค้าเก่า)</h4>
+        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: ยอดค้างเก่า (ลูกค้าเก่า - แบ่งจ่ายเป็นงวด)</h4>
         <div class="table-responsive">
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
@@ -767,12 +801,13 @@ def customer_debt():
                         <th>ยอดค้างตั้งต้น</th>
                         <th>ยอดค้างคงเหลือ</th>
                         <th>เก็บเงินได้แล้ว</th>
+                        <th>งวดคงเหลือ / ทั้งหมด</th>
                         <th>ยอดเก็บสะสมเข้ากำไร</th>
                         <th>สถานะ</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {customer_rows if customer_rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลยอดค้างเก่า</td></tr>"}
+                    {customer_rows if customer_rows else "<tr><td colspan='10' class='text-center text-muted'>ยังไม่มีข้อมูลยอดค้างเก่า</td></tr>"}
                 </tbody>
             </table>
         </div>
