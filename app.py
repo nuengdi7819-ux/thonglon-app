@@ -1,4 +1,4 @@
-from flask import Flask, render_template, request, redirect, url_for, session
+from flask import Flask, render_template_string, request, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 
@@ -7,7 +7,6 @@ app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///thonglon.db'
 app.config['SECRET_KEY'] = 'your_secret_key'
 db = SQLAlchemy(app)
 
-# กำหนดรายชื่อผู้ใช้งานและรหัสผ่านที่ถูกต้อง
 VALID_USERS = {
     'nueng': '909090',
     'nice': '022540'
@@ -135,7 +134,46 @@ def login():
         else:
             error = 'ชื่อผู้ใช้งานหรือรหัสผ่านไม่ถูกต้อง!'
             
-    return render_template('login.html', error=error)
+    login_html = """
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>เข้าสู่ระบบ - ระบบบริหารจัดการ ทองล้น</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+        <style>
+            body { font-family: 'Prompt', sans-serif; background-color: #f8f9fa; }
+            .card { border: none; border-radius: 12px; box-shadow: 0 4px 6px rgba(0,0,0,0.05); }
+        </style>
+    </head>
+    <body class="d-flex align-items-center justify-content-center vh-100">
+        <div class="card p-4 shadow" style="width: 380px;">
+            <h3 class="text-center mb-4 text-primary">🏢 ทองล้น</h3>
+            
+            {% if error %}
+                <div class="alert alert-danger py-2 text-center" role="alert">
+                    {{ error }}
+                </div>
+            {% endif %}
+
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label">ชื่อผู้ใช้งาน:</label>
+                    <input type="text" name="username" class="form-control" placeholder="กรอกชื่อผู้ใช้งาน" required>
+                </div>
+                <div class="mb-3">
+                    <label class="form-label">รหัสผ่าน:</label>
+                    <input type="password" name="password" class="form-control" placeholder="กรอกรหัสผ่าน" required>
+                </div>
+                <button type="submit" class="btn btn-dark w-100">เข้าสู่ระบบ</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(login_html, error=error)
 
 @app.route('/logout')
 def logout():
