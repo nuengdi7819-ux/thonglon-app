@@ -179,7 +179,6 @@ def index():
     today = datetime.now().date()
     for tx in transactions:
         if tx.type == 'ยอดค้างเก่า':
-            # ยอดค้างเก่า: ไม่มีดอกเบี้ยรายวัน เวลา/ดอกเบี้ยสะสมเป็นขีด
             tx.days_passed = '-'
             tx.accumulated_interest = 0.0
             tx.total_paid = tx.original_principal - tx.principal
@@ -193,8 +192,9 @@ def index():
             tx.total_paid = (tx.original_principal - tx.principal) + tx.paid_interest
 
     all_txs = Transaction.query.all()
-    total_original_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
-    total_current_principal = sum(tx.principal for tx in all_txs)
+    total_new_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
+    total_debt_principal = sum(tx.principal for tx in all_txs if tx.type == 'ยอดค้างเก่า')
+    total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     total_profit = sum(tx.paid_interest for tx in all_txs)
 
     rows = ""
@@ -294,19 +294,25 @@ def index():
 
     content = f"""
     <div class="row mb-4">
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #004d99, #3399ff);">
-                <h5>🔱 เงินลงทุนทั้งหมด</h5>
-                <h3>{total_original_investment:,.2f} บาท</h3>
+                <h5>🔱 เงินลงทุนใหม่</h5>
+                <h3>{total_new_investment:,.2f} บาท</h3>
             </div>
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
+            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #d97706, #f59e0b);">
+                <h5>📂 ยอดค้างเก่าคงเหลือ</h5>
+                <h3>{total_debt_principal:,.2f} บาท</h3>
+            </div>
+        </div>
+        <div class="col-md-3 mb-3">
             <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #b30000, #ff4d4d);">
                 <h5>💼 เงินต้นคงค้าง</h5>
-                <h3>{total_current_principal:,.2f} บาท</h3>
+                <h3>{total_new_principal:,.2f} บาท</h3>
             </div>
         </div>
-        <div class="col-md-4 mb-3">
+        <div class="col-md-3 mb-3">
             <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #006622, #00b33c);">
                 <h5>💰 กำไรสะสมทั้งหมด</h5>
                 <h3>{total_profit:,.2f} บาท</h3>
@@ -420,7 +426,6 @@ def update_payment(tx_id):
     today = datetime.now().date()
     
     if tx.type == 'ยอดค้างเก่า':
-        # ยอดค้างเก่า: จ่ายเข้ามานับเป็นกำไร (paid_interest) ทั้งหมดทันที และไปตัดยอดค้าง (principal) ลดลง
         if payment_type == 'full':
             pay_amount = tx.principal
         else:
