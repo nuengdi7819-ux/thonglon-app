@@ -104,9 +104,36 @@ BASE_LAYOUT = """
             <li><a href="/monthly_summary" class="nav-link sub-menu {% if page == 'monthly' %}active{% endif %}" onclick="toggleSidebar()">📅 4. สรุปยอดรายเดือน</a></li>
         </ul>
         <hr class="border-secondary">
-        <div class="d-flex flex-column gap-2">
+        <div class="d-flex flex-column gap-2 mb-2">
             <a href="/export_data" class="btn btn-outline-warning btn-sm w-100">📥 สำรองข้อมูล (Backup)</a>
+            <button type="button" class="btn btn-outline-info btn-sm w-100" data-bs-toggle="modal" data-bs-target="#importModal">📤 นำเข้าข้อมูล (Restore)</button>
+        </div>
+        <div class="d-flex flex-column gap-2">
             <a href="/logout" class="btn btn-outline-danger w-100 d-none d-lg-block">ออกจากระบบ</a>
+        </div>
+    </div>
+
+    <!-- Modal นำเข้าข้อมูล -->
+    <div class="modal fade" id="importModal" tabindex="-1">
+        <div class="modal-dialog">
+            <div class="modal-content">
+                <form action="/import_data" method="POST" enctype="multipart/form-data">
+                    <div class="modal-header bg-info text-dark">
+                        <h5 class="modal-title fw-bold">📤 นำเข้าข้อมูลสำรอง (Restore CSV)</h5>
+                        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                    </div>
+                    <div class="modal-body">
+                        <p class="text-muted small">เลือกไฟล์ CSV ที่เคยสำรองข้อมูลไว้เพื่อดึงข้อมูลกลับเข้าสู่ระบบ</p>
+                        <div class="mb-3">
+                            <input type="file" name="file" class="form-control" accept=".csv" required>
+                        </div>
+                    </div>
+                    <div class="modal-footer">
+                        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                        <button type="submit" class="btn btn-info fw-bold" onclick="return confirm('ยืนยันการนำเข้าข้อมูล? (ข้อมูลเดิมที่มีอยู่จะไม่หาย แต่จะเพิ่มรายการจากไฟล์เข้าไป)')">อัปโหลดและกู้คืน</button>
+                    </div>
+                </form>
+            </div>
         </div>
     </div>
     
@@ -417,6 +444,47 @@ def export_data():
     
     filename = f"thonglon_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     return send_file(output, mimetype='text/csv', as_attachment=True, download_name=filename)
+
+@app.route('/import_data', methods=['POST'])
+def import_data():
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+    
+    file = request.files.get('file')
+    if file and file.filename.endswith('.csv'):
+        try:
+            stream = io.TextIOWrapper(file.stream, encoding='utf-8-sig')
+            reader = csv.DictReader(stream)
+            for row in reader:
+                # ตรวจสอบและแปลงวันที่
+                s_date = datetime.utcnow().date()
+                if row.get('StartDate'):
+                    try:
+                        s_date = datetime.strptime(row['StartDate'].split()[0], '%Y-%m-%d').date()
+                    except:
+                        try:
+                            s_date = datetime.strptime(row['StartDate'].split()[0], '%d/%m/%Y').date()
+                        except:
+                            pass
+
+                new_t = Transaction(
+                    type=row.get('Type', 'เงินฉุกเฉิน'),
+                    customer_name=row.get('CustomerName', 'ไม่ระบุ'),
+                    phone=row.get('Phone', ''),
+                    sales_name=row.get('SalesName', session.get('admin')),
+                    start_date=s_date,
+                    original_principal=float(row.get('OriginalPrincipal', 0)),
+                    principal=float(row.get('Principal', 0)),
+                    daily_interest=float(row.get('DailyInterest', 0)),
+                    paid_interest=float(row.get('PaidInterest', 0)),
+                    status=row.get('Status', 'ปกติ'),
+                    installment_amount=float(row.get('InstallmentAmount', 0))
+                )
+                db.session.add(new_t)
+            db.session.commit()
+        except Exception as e:
+            print("Import error:", e)
+    return redirect(url_for('index'))
 
 @app.route('/update_payment/<int:tx_id>', methods=['POST'])
 def update_payment(tx_id):
