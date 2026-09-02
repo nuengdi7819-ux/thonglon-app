@@ -39,12 +39,6 @@ class Transaction(db.Model):
 
 with app.app_context():
     db.create_all()
-    # ตรวจสอบและเพิ่มคอลัมน์อัตโนมัติป้องกัน Error 500 จากฐานข้อมูลเก่า
-    try:
-        db.session.execute(db.text('ALTER TABLE transaction ADD COLUMN installment_amount FLOAT DEFAULT 0.0'))
-        db.session.commit()
-    except Exception:
-        db.session.rollback()
 
 BASE_LAYOUT = """
 <!DOCTYPE html>
