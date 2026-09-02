@@ -39,7 +39,7 @@ class Transaction(db.Model):
 
 with app.app_context():
     db.create_all()
-    # ตรวจสอบและเติมคอลัมน์ที่ขาดหายไปจากฐานข้อมูลเก่าโดยอัตโนมัติ
+    # ตรวจสอบและสร้างคอลัมน์ให้อัตโนมัติ ป้องกัน Error ทุกกรณีโดยข้อมูลเดิมอยู่ครบ
     try:
         result = db.session.execute(db.text("PRAGMA table_info(transaction)")).fetchall()
         existing_columns = [row[1] for row in result]
