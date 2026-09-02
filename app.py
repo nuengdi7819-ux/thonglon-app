@@ -39,27 +39,6 @@ class Transaction(db.Model):
 
 with app.app_context():
     db.create_all()
-    # ตรวจสอบและสร้างคอลัมน์ให้อัตโนมัติ ป้องกัน Error ทุกกรณีโดยข้อมูลเดิมอยู่ครบ
-    try:
-        result = db.session.execute(db.text("PRAGMA table_info(transaction)")).fetchall()
-        existing_columns = [row[1] for row in result]
-        
-        required_columns = {
-            'phone': 'VARCHAR(20)',
-            'installment_amount': 'FLOAT DEFAULT 0.0',
-            'paid_interest': 'FLOAT DEFAULT 0.0',
-            'status': "VARCHAR(20) DEFAULT 'ปกติ'",
-            'last_payment_date': 'DATE',
-            'original_principal': 'FLOAT DEFAULT 0.0'
-        }
-        
-        for col, col_type in required_columns.items():
-            if col not in existing_columns:
-                db.session.execute(db.text(f'ALTER TABLE transaction ADD COLUMN {col} {col_type}'))
-                db.session.commit()
-    except Exception as e:
-        print("Migration error:", e)
-        db.session.rollback()
 
 BASE_LAYOUT = """
 <!DOCTYPE html>
@@ -994,7 +973,7 @@ def login():
         <div class="card p-4 shadow-lg w-100" style="max-width: 380px;">
             <h3 class="text-center mb-1 text-danger fw-bold">🔱 ทองล้น</h3>
             <p class="text-center text-muted small mb-4">ระบบบริหารจัดการการเงิน</p>
-            {% if error %}<div class="alert alert-danger py-2 text-center">{{ error }}</div>{% endif %}
+            {% if error %}<div class="alert alert-danger py-2 text-center">{{ error }}</div>{% error_endif %}
             <form method="POST">
                 <div class="mb-3"><label class="form-label">ชื่อผู้ใช้งาน:</label><input type="text" name="username" class="form-control" required></div>
                 <div class="mb-3"><label class="form-label">รหัสผ่าน:</label><input type="password" name="password" class="form-control" required></div>
