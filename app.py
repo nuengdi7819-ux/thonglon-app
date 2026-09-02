@@ -25,7 +25,6 @@ class Transaction(db.Model):
     paid_interest = db.Column(db.Float, default=0.0)     
     status = db.Column(db.String(20), default='ปกติ')
 
-# สร้างตารางฐานข้อมูลทันทีที่แอปเริ่มต้นทำงาน (รองรับทั้งบน Render และเครื่องตัวเอง)
 with app.app_context():
     db.create_all()
 
@@ -63,7 +62,7 @@ def index():
         customers = db.session.query(Transaction.customer_name, Transaction.phone).distinct().all()
         all_customers = [c[0] for c in customers]
         customer_phone_map = {c[0]: c[1] for c in customers if c[1]}
-        sales_list = ["nice", "nueng"]
+        sales_list = ["เซลล์ A", "เซลล์ B", "เซลล์ C"]
 
         return render_template('index.html', 
                                transactions=transactions,
@@ -77,6 +76,71 @@ def index():
                                current_admin=session.get('admin'))
     except Exception as e:
         return f"<h3>เกิดข้อผิดพลาดในระบบ:</h3><pre>{traceback.format_exc()}</pre>"
+
+@app.route('/sales_members')
+def sales_members():
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+    
+    # ดึงข้อมูลการแบ่งตามชื่อเซลล์
+    all_txs = Transaction.query.all()
+    sales_data = {}
+    for tx in all_txs:
+        if tx.sales_name not in sales_data:
+            sales_data[tx.sales_name] = []
+        sales_data[tx.sales_name].append(tx)
+
+    sales_html = """
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>สมาชิกภายใต้เซลล์ - ทองล้น</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+        <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
+        <style>body { font-family: 'Prompt', sans-serif; background-color: #f8f9fa; }</style>
+    </head>
+    <body class="p-4">
+        <div class="container">
+            <div class="d-flex justify-content-between align-items-center mb-4">
+                <h2>📊 สมาชิกภายใต้เซลล์ทั้งหมด</h2>
+                <a href="/" class="btn btn-secondary">กลับหน้าหลัก</a>
+            </div>
+            {% for sales, txs in sales_data.items() %}
+                <div class="card mb-4 shadow-sm">
+                    <div class="card-header bg-dark text-white">
+                        <h5 class="mb-0">เซลล์: {{ sales }}</h5>
+                    </div>
+                    <div class="card-body">
+                        <table class="table table-striped">
+                            <thead>
+                                <tr>
+                                    <th>ชื่อลูกค้า</th>
+                                    <th>เบอร์โทร</th>
+                                    <th>เงินต้น</th>
+                                    <th>สถานะ</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {% for tx in txs %}
+                                <tr>
+                                    <td>{{ tx.customer_name }}</td>
+                                    <td>{{ tx.phone or '-' }}</td>
+                                    <td>{{ "{:,.2f}".format(tx.principal) }}</td>
+                                    <td>{{ tx.status }}</td>
+                                </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+            {% endfor %}
+        </div>
+    </body>
+    </html>
+    """
+    return render_template_string(sales_html, sales_data=sales_data)
 
 @app.route('/update_payment/<int:tx_id>', methods=['POST'])
 def update_payment(tx_id):
