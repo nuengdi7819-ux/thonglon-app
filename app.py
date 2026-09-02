@@ -44,16 +44,13 @@ BASE_LAYOUT = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>{{ title }} - ทองล้น (ธีมท้าวเวสสุวรรณ)</title>
+    <title>{{ title }} - ทองล้น</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Prompt', sans-serif; background-color: #fcf6f0; }
-        
-        /* ธีมสีแดง-ทอง ท้าวเวสสุวรรณ */
         .sidebar { width: 260px; min-height: 100vh; background: #2c0b0e; border-right: 2px solid #d4af37; position: fixed; top: 0; left: 0; z-index: 1050; transition: transform 0.3s ease-in-out; overflow-y: auto; color: #f8f9fa; }
         .main-content { margin-left: 260px; padding: 25px; transition: margin 0.3s ease-in-out; }
-        
         .nav-link { color: #f1d3b2; font-weight: 500; padding: 10px 15px; border-radius: 6px; margin-bottom: 4px; font-size: 0.95rem; white-space: nowrap; }
         .nav-link:hover, .nav-link.active { background-color: #d4af37; color: #2c0b0e; font-weight: 600; }
         .sub-menu { padding-left: 25px; font-size: 0.9rem; color: #dfb182; }
@@ -77,7 +74,7 @@ BASE_LAYOUT = """
     <div class="mobile-header shadow-sm">
         <div class="d-flex align-items-center gap-2">
             <button class="btn btn-outline-warning btn-sm" onclick="toggleSidebar()">☰ เมนู</button>
-            <h5 class="text-warning fw-bold mb-0">🔱 ทองล้น (ท้าวเวสสุวรรณ)</h5>
+            <h5 class="text-warning fw-bold mb-0">🔱 ทองล้น.com</h5>
         </div>
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-warning text-dark">{{ session.get('admin') }}</span>
@@ -357,7 +354,7 @@ def index():
     </div>
     """
 
-    html = BASE_LAYOUT.replace('{% block header %}Dashboard{% endblock %}', '🔱 Dashboard บริหารจัดการ (ธีมท้าวเวสสุวรรณ)')
+    html = BASE_LAYOUT.replace('{% block header %}Dashboard{% endblock %}', '🔱 Dashboard บริหารจัดการระบบ')
     html = html.replace('{% block content %}{% endblock %}', content)
     return render_template_string(html, title="Dashboard", page="dashboard")
 
@@ -378,7 +375,7 @@ def export_data():
     output.write(si.getvalue().encode('utf-8-sig'))
     output.seek(0)
     
-    filename = f"thonglon_wessuwan_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"thonglon_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
     return send_file(output, mimetype='text/csv', as_attachment=True, download_name=filename)
 
 @app.route('/update_payment/<int:tx_id>', methods=['POST'])
@@ -835,7 +832,7 @@ def login():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>เข้าสู่ระบบ - ทองล้น (ธีมท้าวเวสสุวรรณ)</title>
+        <title>เข้าสู่ระบบ - ทองล้น</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
         <style>
@@ -845,8 +842,8 @@ def login():
     </head>
     <body class="d-flex align-items-center justify-content-center vh-100 p-3">
         <div class="card p-4 shadow-lg w-100" style="max-width: 380px;">
-            <h3 class="text-center mb-2 text-danger fw-bold">🔱 ทองล้น</h3>
-            <p class="text-center text-muted small mb-4">ระบบบริหารจัดการ (ธีมท้าวเวสสุวรรณ)</p>
+            <h3 class="text-center mb-1 text-danger fw-bold">🔱 ทองล้น</h3>
+            <p class="text-center text-muted small mb-4">ระบบบริหารจัดการการเงิน</p>
             {% if error %}<div class="alert alert-danger py-2 text-center">{{ error }}</div>{% endif %}
             <form method="POST">
                 <div class="mb-3"><label class="form-label">ชื่อผู้ใช้งาน:</label><input type="text" name="username" class="form-control" required></div>
