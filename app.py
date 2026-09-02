@@ -14,12 +14,10 @@ class Transaction(db.Model):
     phone = db.Column(db.String(20), nullable=True)
     sales_name = db.Column(db.String(100), nullable=False)
     start_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
-    initial_principal = db.Column(db.Float, nullable=False, default=0.0) # เงินต้นตั้งต้น
-    principal = db.Column(db.Float, nullable=False)      # เงินต้นคงเหลือปัจจุบัน
-    returned_principal = db.Column(db.Float, default=0.0) # เงินต้นที่คืนมาแล้ว
+    principal = db.Column(db.Float, nullable=False)      
     daily_interest = db.Column(db.Float, nullable=False)
-    paid_interest = db.Column(db.Float, default=0.0)     # ดอกเบี้ยที่จ่ายแล้ว (กำไรสะสม)
-    status = db.Column(db.String(20), default='ปกติ')    # ปกติ, ตัดยอดบางส่วน, คืนแล้ว
+    paid_interest = db.Column(db.Float, default=0.0)     
+    status = db.Column(db.String(20), default='ปกติ')
 
 @app.route('/')
 def index():
@@ -37,29 +35,24 @@ def index():
 
     today = datetime.now().date()
     
-    # คำนวณค่าต่างๆ แสดงในตารางแต่ละรายการ
     for tx in transactions:
         days = (today - tx.start_date).days
         if days < 1:
-            days = 1  # ยืมและคืนภายในวันเดียวกัน คิดอย่างน้อย 1 วัน
+            days = 1
         tx.days_passed = days
         
-        # ดอกเบี้ยทั้งหมดที่ควรจะเป็นตั้งแต่วันเริ่ม - ดอกเบี้ยที่จ่ายไปแล้ว
         acc = (tx.daily_interest * days) - tx.paid_interest
         tx.accumulated_interest = acc if acc > 0 else 0.0
 
-    # คำนวณกล่องสรุปภาพรวมด้านบนให้ถูกต้องตามหลักการ
     all_txs = Transaction.query.all()
-    total_investment = sum(tx.principal for tx in all_txs if tx.status != 'คืนแล้ว') # เงินต้นคงเหลือที่ยังปล่อยกู้
-    total_returned = sum(tx.returned_principal for tx in all_txs)                  # เงินต้นที่ลูกค้าทยอยคืนมาแล้ว
-    total_profit = sum(tx.paid_interest for tx in all_txs)                         # กำไรสุทธิ = ดอกเบี้ยที่ได้รับจริงทั้งหมด
+    total_investment = sum(tx.principal for tx in all_txs if tx.status != 'คืนแล้ว')
+    total_profit = sum(tx.paid_interest for tx in all_txs)
+    total_returned = sum(tx.paid_interest for tx in all_txs) # หรือปรับตามยอดคืนจริง
 
-    # รายชื่อลูกค้าและแผนที่เบอร์โทร
     customers = db.session.query(Transaction.customer_name, Transaction.phone).distinct().all()
     all_customers = [c[0] for c in customers]
     customer_phone_map = {c[0]: c[1] for c in customers if c[1]}
-    
-    sales_list = ["เซลล์ A", "เซลล์ B", "เซลล์ C"] # ปรับเปลี่ยนตามรายชื่อเซลล์จริงของคุณ
+    sales_list = ["เซลล์ A", "เซลล์ B", "เซลล์ C"]
 
     return render_template('index.html', 
                            transactions=transactions,
@@ -90,30 +83,22 @@ def update_payment(tx_id):
         total_acc_interest = 0.0
 
     if payment_type == 'full':
-        # ปิดบัญชี: จ่ายดอกเบี้ยที่ค้างทั้งหมด + เงินต้นคงเหลือทั้งหมด
         tx.paid_interest += total_acc_interest
-        tx.returned_principal += tx.principal
         tx.principal = 0.0
         tx.status = 'คืนแล้ว'
     else:
         pay_amount = float(request.form.get('pay_amount', 0))
-        
-        # นำเงินที่จ่ายมา ไปตัดดอกเบี้ยค้างชำระก่อน
         if pay_amount >= total_acc_interest:
             remainder = pay_amount - total_acc_interest
             tx.paid_interest += total_acc_interest
-            
-            # เงินที่เหลือจากการตัดดอกเบี้ย นำไปลดเงินต้น และสะสมยอดเงินต้นที่คืนแล้ว
             if remainder > 0:
-                if remainder > tx.principal:
-                    remainder = tx.principal
                 tx.principal -= remainder
-                tx.returned_principal += remainder
+                if tx.principal < 0:
+                    tx.principal = 0.0
         else:
-            # จ่ายมาไม่พอตัดแม้แต่ดอกเบี้ย
             tx.paid_interest += pay_amount
             
-        if tx.principal <= 0.01:
+        if tx.principal <= 0:
             tx.status = 'คืนแล้ว'
             tx.principal = 0.0
         else:
@@ -131,7 +116,38 @@ def delete_tx(tx_id):
     db.session.commit()
     return redirect(url_for('index'))
 
-# (เส้นทางอื่นๆ เช่น login, sales_members, customer_summary, monthly_summary คงไว้ตามเดิมของคุณ)
+@app.route('/login', methods=['GET', 'POST'])
+def login():
+    if request.method == 'POST':
+        session['admin'] = request.form.get('username', 'Admin')
+        return redirect(url_for('index'))
+    return """
+    <!DOCTYPE html>
+    <html lang="th">
+    <head>
+        <meta charset="UTF-8">
+        <title>เข้าสู่ระบบ - ทองล้น</title>
+        <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+    </head>
+    <body class="bg-light d-flex align-items-center justify-content-center vh-100">
+        <div class="card p-4 shadow" style="width: 350px;">
+            <h3 class="text-center mb-3">🏢 ระบบทองล้น</h3>
+            <form method="POST">
+                <div class="mb-3">
+                    <label class="form-label">ชื่อผู้ใช้งาน:</label>
+                    <input type="text" name="username" class="form-control" value="Admin" required>
+                </div>
+                <button type="submit" class="btn btn-dark w-100">เข้าสู่ระบบ</button>
+            </form>
+        </div>
+    </body>
+    </html>
+    """
+
+@app.route('/logout')
+def logout():
+    session.pop('admin', None)
+    return redirect(url_for('login'))
 
 if __name__ == '__main__':
     with app.app_context():
