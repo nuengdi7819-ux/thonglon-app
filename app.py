@@ -201,6 +201,7 @@ def index():
         start_date_str = tx.start_date.strftime('%d/%m/%Y') if tx.start_date else '-'
         last_pay_str = tx.last_payment_date.strftime('%d/%m/%Y') if tx.last_payment_date else '-'
 
+        # ตารางหน้า Dashboard ตัดคอลัมน์เซลล์ออกแล้ว
         rows += f"""
         <tr>
             <td>{tx.customer_name}</td>
