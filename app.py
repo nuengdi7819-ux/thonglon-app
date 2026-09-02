@@ -39,6 +39,13 @@ class Transaction(db.Model):
 
 with app.app_context():
     db.create_all()
+    # อัปเดตโครงสร้างฐานข้อมูลอัตโนมัติ ป้องกัน Error ขาดคอลัมน์
+    for col_name, col_type in [('phone', 'VARCHAR(20)'), ('installment_amount', 'FLOAT DEFAULT 0.0'), ('paid_interest', 'FLOAT DEFAULT 0.0'), ('status', "VARCHAR(20) DEFAULT 'ปกติ'"), ('last_payment_date', 'DATE')]:
+        try:
+            db.session.execute(db.text(f'ALTER TABLE transaction ADD COLUMN {col_name} {col_type}'))
+            db.session.commit()
+        except Exception:
+            db.session.rollback()
 
 BASE_LAYOUT = """
 <!DOCTYPE html>
