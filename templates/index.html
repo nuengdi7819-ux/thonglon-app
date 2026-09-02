@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>แดชบอร์ดสรุปผลประกอบการ ทองลัน</title>
+    <title>แดชบอร์ดสรุปผลประกอบการ ทองล้น</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
@@ -66,7 +66,7 @@
                     </div>
                     <div class="col-md-3 mb-3">
                         <label class="form-label">ชื่อลูกค้า:</label>
-                        <input type="text" name="customer_name" id="customerNameInput" class="form-control" list="customerList" placeholder="พิมพ์หรือเลือกชื่อ" oninput="autofillPhone()" required>
+                        <input type="text" name="customer_name" id="customerNameInput" class="form-control" list="customerList" placeholder="พิมพ์หรือเลือกชื่อ" required>
                         <datalist id="customerList">
                             {% for cname in all_customers %}
                                 <option value="{{ cname }}">
@@ -141,7 +141,7 @@
                             <th>ผ่านไป</th>
                             <th>ดอกเบี้ยสุทธิ (ค้างชำระ)</th>
                             <th>สถานะ</th>
-                            <th>จัดการ</th>
+                            <th style="min-width: 170px;">จัดการ</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -168,14 +168,16 @@
                                 {% endif %}
                             </td>
                             <td>
-                                {% if tx.status != 'คืนแล้ว' %}
-                                <button class="btn btn-sm btn-outline-success" data-bs-toggle="modal" data-bs-target="#payModal{{ tx.id }}">
-                                    💵 จัดการยอด
-                                </button>
-                                {% endif %}
-                                <a href="{{ url_for('delete_tx', tx_id=tx.id) }}" class="btn btn-sm btn-danger ms-1" onclick="return confirm('ยืนยันการลบรายการนี้?');">
-                                    <i class="fa-solid fa-trash"></i> ลบ
-                                </a>
+                                <div class="d-flex align-items-center gap-1">
+                                    {% if tx.status != 'คืนแล้ว' %}
+                                    <button class="btn btn-sm btn-outline-success text-nowrap" data-bs-toggle="modal" data-bs-target="#payModal{{ tx.id }}">
+                                        💵 จัดการยอด
+                                    </button>
+                                    {% endif %}
+                                    <a href="{{ url_for('delete_tx', tx_id=tx.id) }}" class="btn btn-sm btn-danger text-nowrap" onclick="return confirm('ยืนยันการลบรายการนี้?');">
+                                        <i class="fa-solid fa-trash"></i> ลบ
+                                    </a>
+                                </div>
 
                                 <!-- Modal จัดการยอดชำระ -->
                                 <div class="modal fade" id="payModal{{ tx.id }}" tabindex="-1" aria-hidden="true">
@@ -225,6 +227,7 @@
         </div>
     </div>
 
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
         const customerPhones = {{ customer_phone_map | tojson }};
         const nameInput = document.getElementById('customerNameInput');
