@@ -1,12 +1,19 @@
-from flask import Flask, render_template_string, request, redirect, url_for, session
+from flask import Flask, render_template_string, request, redirect, url_for, session, send_file
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
 from collections import defaultdict
-import traceback
+import os
+import io
+import csv
 
 app = Flask(__name__)
-app.config['SQLALCHEMY_DATABASE_URI'] = 'sqlite:///thonglon.db'
-app.config['SECRET_KEY'] = 'your_secret_key'
+
+basedir = os.path.abspath(os.path.dirname(__file__))
+db_path = os.path.join(basedir, 'thonglon.db')
+
+app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+app.config['SECRET_KEY'] = 'your_secret_key_thonglon_2026'
 db = SQLAlchemy(app)
 
 VALID_USERS = {
@@ -36,40 +43,83 @@ BASE_LAYOUT = """
 <html lang="th">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
     <title>{{ title }} - ทองล้น</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
         body { font-family: 'Prompt', sans-serif; background-color: #f8f9fa; }
-        .sidebar { width: 260px; min-height: 100vh; background: #fff; border-right: 1px solid #dee2e6; position: fixed; }
-        .main-content { margin-left: 260px; padding: 30px; }
-        .nav-link { color: #333; font-weight: 500; padding: 10px 20px; border-radius: 6px; margin-bottom: 5px; }
+        
+        /* Sidebar Desktop */
+        .sidebar { width: 260px; min-height: 100vh; background: #fff; border-right: 1px solid #dee2e6; position: fixed; top: 0; left: 0; z-index: 1050; transition: transform 0.3s ease-in-out; overflow-y: auto; }
+        .main-content { margin-left: 260px; padding: 25px; transition: margin 0.3s ease-in-out; }
+        
+        .nav-link { color: #333; font-weight: 500; padding: 10px 15px; border-radius: 6px; margin-bottom: 4px; font-size: 0.95rem; white-space: nowrap; }
         .nav-link:hover, .nav-link.active { background-color: #ffc107; color: #000; }
-        .sub-menu { padding-left: 20px; font-size: 0.95rem; }
+        .sub-menu { padding-left: 25px; font-size: 0.9rem; }
+
+        .mobile-header { display: none; background: #fff; border-bottom: 1px solid #dee2e6; padding: 12px 15px; position: sticky; top: 0; z-index: 1040; }
+        .sidebar-backdrop { display: none; position: fixed; top: 0; left: 0; width: 100vw; height: 100vh; background: rgba(0,0,0,0.4); z-index: 1045; }
+
+        /* Responsive สำหรับมือถือ: ซ่อน Sidebar ไว้ด้านข้าง แล้วทำปุ่มกดสไลด์ */
+        @media (max-width: 992px) {
+            .sidebar { transform: translateX(-100%); }
+            .sidebar.show { transform: translateX(0); }
+            .main-content { margin-left: 0; padding: 15px; }
+            .mobile-header { display: flex; justify-content: space-between; align-items: center; }
+            .sidebar-backdrop.show { display: block; }
+        }
     </style>
 </head>
 <body>
-    <div class="sidebar p-3 d-flex flex-column">
-        <h4 class="text-warning fw-bold mb-4 px-2">🪙 ทองล้น.com</h4>
+    <!-- Mobile Top Bar -->
+    <div class="mobile-header shadow-sm">
+        <div class="d-flex align-items-center gap-2">
+            <button class="btn btn-outline-dark btn-sm" onclick="toggleSidebar()">☰ เมนู</button>
+            <h5 class="text-warning fw-bold mb-0">🪙 ทองล้น.com</h5>
+        </div>
+        <a href="/logout" class="btn btn-outline-danger btn-sm">ออกจากระบบ</a>
+    </div>
+
+    <!-- Backdrop สำหรับคลิกปิดเมนูมือถือ -->
+    <div class="sidebar-backdrop" id="sidebarBackdrop" onclick="toggleSidebar()"></div>
+
+    <div class="sidebar p-3 d-flex flex-column shadow-sm" id="sidebarMenu">
+        <div class="d-flex justify-content-between align-items-center mb-2">
+            <h4 class="text-warning fw-bold d-none d-lg-block">🪙 ทองล้น.com</h4>
+            <h5 class="text-warning fw-bold d-lg-none">🪙 เมนูหลัก</h5>
+            <button class="btn-close d-lg-none" onclick="toggleSidebar()"></button>
+        </div>
         <ul class="nav nav-pills flex-column mb-auto">
-            <li class="nav-item"><a href="/" class="nav-link {% if page == 'dashboard' %}active{% endif %}">📊 Dashboard</a></li>
-            <li><a href="/members" class="nav-link {% if page == 'members' %}active{% endif %}">👥 1. สมาชิกทั้งหมด</a></li>
-            <li><a href="/sales_members" class="nav-link {% if page == 'sales' %}active{% endif %}">📋 2. สมาชิกภายใต้เซลล์</a></li>
-            <li><a href="/customer_summary" class="nav-link {% if page == 'customer' %}active{% endif %}">📂 3. สรุปลูกค้า</a></li>
-            <li><a href="/customer_emergency" class="nav-link sub-menu {% if page == 'emergency' %}active{% endif %}">🔸 3.1 เงินฉุกเฉิน</a></li>
-            <li><a href="/customer_gold" class="nav-link sub-menu {% if page == 'gold' %}active{% endif %}">🔸 3.2 ผ่อนทอง</a></li>
-            <li><a href="/monthly_summary" class="nav-link {% if page == 'monthly' %}active{% endif %}">📅 4. สรุปยอดรายเดือน</a></li>
+            <li class="nav-item"><a href="/" class="nav-link {% if page == 'dashboard' %}active{% endif %}" onclick="toggleSidebar()">📊 Dashboard</a></li>
+            <li><a href="/members" class="nav-link {% if page == 'members' %}active{% endif %}" onclick="toggleSidebar()">👥 1. สมาชิกทั้งหมด</a></li>
+            <li><a href="/sales_members" class="nav-link {% if page == 'sales' %}active{% endif %}" onclick="toggleSidebar()">📋 2. สมาชิกภายใต้เซลล์</a></li>
+            <li><a href="/customer_summary" class="nav-link {% if page == 'customer' %}active{% endif %}" onclick="toggleSidebar()">📂 3. สรุปลูกค้า</a></li>
+            <li><a href="/customer_emergency" class="nav-link sub-menu {% if page == 'emergency' %}active{% endif %}" onclick="toggleSidebar()">🔸 3.1 เงินฉุกเฉิน</a></li>
+            <li><a href="/customer_gold" class="nav-link sub-menu {% if page == 'gold' %}active{% endif %}" onclick="toggleSidebar()">🔸 3.2 ผ่อนทอง</a></li>
+            <li><a href="/monthly_summary" class="nav-link {% if page == 'monthly' %}active{% endif %}" onclick="toggleSidebar()">📅 4. สรุปยอดรายเดือน</a></li>
         </ul>
         <hr>
-        <a href="/logout" class="btn btn-outline-danger w-100">ออกจากระบบ</a>
+        <div class="d-flex flex-column gap-2">
+            <a href="/export_data" class="btn btn-outline-success btn-sm w-100">📥 สำรองข้อมูล (Backup)</a>
+            <a href="/logout" class="btn btn-outline-danger w-100 d-none d-lg-block">ออกจากระบบ</a>
+        </div>
     </div>
+    
     <div class="main-content">
-        <h2 class="mb-4 text-dark fw-bold">{% block header %}{% endblock %}</h2>
+        <h2 class="mb-4 text-dark fw-bold fs-4">{% block header %}{% endblock %}</h2>
         {% block content %}{% endblock %}
     </div>
+
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
     <script>
+    function toggleSidebar() {
+        const sidebar = document.getElementById('sidebarMenu');
+        const backdrop = document.getElementById('sidebarBackdrop');
+        sidebar.classList.toggle('show');
+        backdrop.classList.toggle('show');
+    }
+
     function togglePayInput(id) {
         let selectElem = document.getElementById('payType' + id);
         let divElem = document.getElementById('amountDiv' + id);
@@ -204,19 +254,19 @@ def index():
 
     content = f"""
     <div class="row mb-4">
-        <div class="col-md-4">
+        <div class="col-md-4 mb-3">
             <div class="card p-3 shadow-sm bg-warning text-dark">
                 <h5>เงินลงทุนทั้งหมด</h5>
                 <h3>{total_original_investment:,.2f} บาท</h3>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-4 mb-3">
             <div class="card p-3 shadow-sm bg-info text-dark">
                 <h5>เงินต้นคงค้าง</h5>
                 <h3>{total_current_principal:,.2f} บาท</h3>
             </div>
         </div>
-        <div class="col-md-4">
+        <div class="col-md-4 mb-3">
             <div class="card p-3 shadow-sm bg-success text-white">
                 <h5>กำไรสะสมทั้งหมด</h5>
                 <h3>{total_profit:,.2f} บาท</h3>
@@ -225,7 +275,7 @@ def index():
     </div>
 
     <div class="card p-4 shadow-sm mb-4">
-        <h4 class="mb-3">➕ เพิ่มรายการใหม่</h4>
+        <h4 class="mb-3 fs-5">➕ เพิ่มรายการใหม่</h4>
         <form method="POST" class="row g-3">
             <div class="col-md-3">
                 <label class="form-label">ประเภท</label>
@@ -268,15 +318,15 @@ def index():
     </div>
 
     <div class="card p-4 shadow-sm">
-        <div class="d-flex justify-content-between align-items-center mb-3">
-            <h4 class="mb-0">📋 รายการทั้งหมด</h4>
+        <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
+            <h4 class="mb-0 fs-5">📋 รายการทั้งหมด</h4>
             <form method="GET" class="d-flex">
                 <input type="text" name="search" class="form-control form-control-sm me-2" placeholder="ค้นหาชื่อ หรือเบอร์โทร..." value="{search_query}">
                 <button type="submit" class="btn btn-sm btn-outline-dark">ค้นหา</button>
             </form>
         </div>
         <div class="table-responsive">
-            <table class="table table-striped align-middle">
+            <table class="table table-striped align-middle text-nowrap">
                 <thead>
                     <tr>
                         <th>ชื่อลูกค้า</th>
@@ -305,6 +355,26 @@ def index():
     html = BASE_LAYOUT.replace('{% block header %}Dashboard{% endblock %}', 'Dashboard บริหารจัดการระบบ')
     html = html.replace('{% block content %}{% endblock %}', content)
     return render_template_string(html, title="Dashboard", page="dashboard")
+
+@app.route('/export_data')
+def export_data():
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+    
+    si = io.StringIO()
+    cw = csv.writer(si)
+    cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status'])
+    
+    txs = Transaction.query.all()
+    for t in txs:
+        cw.writerow([t.id, t.type, t.customer_name, t.phone, t.sales_name, t.start_date, t.original_principal, t.principal, t.daily_interest, t.paid_interest, t.status])
+    
+    output = io.BytesIO()
+    output.write(si.getvalue().encode('utf-8-sig'))
+    output.seek(0)
+    
+    filename = f"thonglon_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    return send_file(output, mimetype='text/csv', as_attachment=True, download_name=filename)
 
 @app.route('/update_payment/<int:tx_id>', methods=['POST'])
 def update_payment(tx_id):
@@ -382,11 +452,13 @@ def members():
     
     content = f"""
     <div class="card p-4 shadow-sm">
-        <h4 class="mb-3">รายชื่อสมาชิกทั้งหมด</h4>
-        <table class="table table-striped">
-            <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เซลล์ผู้ดูแล</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
-            <tbody>{rows if rows else "<tr><td colspan='8' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
-        </table>
+        <h4 class="mb-3 fs-5">รายชื่อสมาชิกทั้งหมด</h4>
+        <div class="table-responsive">
+            <table class="table table-striped text-nowrap">
+                <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เซลล์ผู้ดูแล</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
+                <tbody>{rows if rows else "<tr><td colspan='8' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
+            </table>
+        </div>
     </div>
     """
     html = BASE_LAYOUT.replace('{% block header %}1. สมาชิกทั้งหมด{% endblock %}', 'สมาชิกทั้งหมด').replace('{% block content %}{% endblock %}', content)
@@ -422,12 +494,14 @@ def sales_members():
             """
         sales_content += f"""
         <div class="card mb-4 shadow-sm">
-            <div class="card-header bg-dark text-white"><h5 class="mb-0">เซลล์: {sales}</h5></div>
+            <div class="card-header bg-dark text-white"><h5 class="mb-0 fs-6">เซลล์: {sales}</h5></div>
             <div class="card-body">
-                <table class="table table-striped">
-                    <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
-                    <tbody>{sub_rows}</tbody>
-                </table>
+                <div class="table-responsive">
+                    <table class="table table-striped text-nowrap">
+                        <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
+                        <tbody>{sub_rows}</tbody>
+                    </table>
+                </div>
             </div>
         </div>
         """
@@ -463,9 +537,9 @@ def customer_summary():
 
     content = f"""
     <div class="card p-4 shadow-sm">
-        <h4 class="mb-3">สรุปข้อมูลลูกค้าทั้งหมด</h4>
+        <h4 class="mb-3 fs-5">สรุปข้อมูลลูกค้าทั้งหมด</h4>
         <div class="table-responsive">
-            <table class="table table-striped align-middle">
+            <table class="table table-striped align-middle text-nowrap">
                 <thead>
                     <tr>
                         <th>ชื่อลูกค้า</th>
@@ -516,9 +590,9 @@ def customer_emergency():
 
     content = f"""
     <div class="card p-4 shadow-sm">
-        <h4 class="mb-3">สรุปข้อมูลลูกค้า: เงินฉุกเฉิน</h4>
+        <h4 class="mb-3 fs-5">สรุปข้อมูลลูกค้า: เงินฉุกเฉิน</h4>
         <div class="table-responsive">
-            <table class="table table-striped align-middle">
+            <table class="table table-striped align-middle text-nowrap">
                 <thead>
                     <tr>
                         <th>ชื่อลูกค้า</th>
@@ -568,9 +642,9 @@ def customer_gold():
 
     content = f"""
     <div class="card p-4 shadow-sm">
-        <h4 class="mb-3">สรุปข้อมูลลูกค้า: ผ่อนทอง</h4>
+        <h4 class="mb-3 fs-5">สรุปข้อมูลลูกค้า: ผ่อนทอง</h4>
         <div class="table-responsive">
-            <table class="table table-striped align-middle">
+            <table class="table table-striped align-middle text-nowrap">
                 <thead>
                     <tr>
                         <th>ชื่อลูกค้า</th>
@@ -633,21 +707,23 @@ def monthly_summary():
 
     content = f"""
     <div class="card p-4 shadow-sm">
-        <h4 class="mb-3">สรุปยอดผลประกอบการรายเดือน</h4>
-        <table class="table table-bordered">
-            <thead class="table-dark">
-                <tr>
-                    <th>ประจำเดือน (Year-Month)</th>
-                    <th>จำนวนรายการ</th>
-                    <th>ทุนที่ใช้เดือนนี้ (บาท)</th>
-                    <th>กำไรเดือนนี้ (บาท)</th>
-                    <th>ยอดรอเก็บรวม (บาท)</th>
-                </tr>
-            </thead>
-            <tbody>
-                {monthly_rows if monthly_rows else "<tr><td colspan='5' class='text-center text-muted'>ยังไม่มีข้อมูลสรุปยอดรายเดือน</td></tr>"}
-            </tbody>
-        </table>
+        <h4 class="mb-3 fs-5">สรุปยอดผลประกอบการรายเดือน</h4>
+        <div class="table-responsive">
+            <table class="table table-bordered text-nowrap">
+                <thead class="table-dark">
+                    <tr>
+                        <th>ประจำเดือน (Year-Month)</th>
+                        <th>จำนวนรายการ</th>
+                        <th>ทุนที่ใช้เดือนนี้ (บาท)</th>
+                        <th>กำไรเดือนนี้ (บาท)</th>
+                        <th>ยอดรอเก็บรวม (บาท)</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {monthly_rows if monthly_rows else "<tr><td colspan='5' class='text-center text-muted'>ยังไม่มีข้อมูลสรุปยอดรายเดือน</td></tr>"}
+                </tbody>
+            </table>
+        </div>
     </div>
     """
     html = BASE_LAYOUT.replace('{% block header %}4. สรุปยอดผลประกอบการรายเดือน{% endblock %}', 'สรุปยอดรายเดือน').replace('{% block content %}{% endblock %}', content)
@@ -671,13 +747,14 @@ def login():
     <html lang="th">
     <head>
         <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
         <title>เข้าสู่ระบบ - ทองล้น</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
         <style>body { font-family: 'Prompt', sans-serif; background-color: #f8f9fa; }</style>
     </head>
-    <body class="d-flex align-items-center justify-content-center vh-100">
-        <div class="card p-4 shadow" style="width: 380px;">
+    <body class="d-flex align-items-center justify-content-center vh-100 p-3">
+        <div class="card p-4 shadow w-100" style="max-width: 380px;">
             <h3 class="text-center mb-4 text-warning fw-bold">🪙 ทองล้น</h3>
             {% if error %}<div class="alert alert-danger py-2 text-center">{{ error }}</div>{% endif %}
             <form method="POST">
