@@ -39,13 +39,27 @@ class Transaction(db.Model):
 
 with app.app_context():
     db.create_all()
-    # อัปเดตโครงสร้างฐานข้อมูลอัตโนมัติ ป้องกัน Error ขาดคอลัมน์
-    for col_name, col_type in [('phone', 'VARCHAR(20)'), ('installment_amount', 'FLOAT DEFAULT 0.0'), ('paid_interest', 'FLOAT DEFAULT 0.0'), ('status', "VARCHAR(20) DEFAULT 'ปกติ'"), ('last_payment_date', 'DATE')]:
-        try:
-            db.session.execute(db.text(f'ALTER TABLE transaction ADD COLUMN {col_name} {col_type}'))
-            db.session.commit()
-        except Exception:
-            db.session.rollback()
+    # ตรวจสอบและเติมคอลัมน์ที่ขาดหายไปจากฐานข้อมูลเก่าโดยอัตโนมัติ
+    try:
+        result = db.session.execute(db.text("PRAGMA table_info(transaction)")).fetchall()
+        existing_columns = [row[1] for row in result]
+        
+        required_columns = {
+            'phone': 'VARCHAR(20)',
+            'installment_amount': 'FLOAT DEFAULT 0.0',
+            'paid_interest': 'FLOAT DEFAULT 0.0',
+            'status': "VARCHAR(20) DEFAULT 'ปกติ'",
+            'last_payment_date': 'DATE',
+            'original_principal': 'FLOAT DEFAULT 0.0'
+        }
+        
+        for col, col_type in required_columns.items():
+            if col not in existing_columns:
+                db.session.execute(db.text(f'ALTER TABLE transaction ADD COLUMN {col} {col_type}'))
+                db.session.commit()
+    except Exception as e:
+        print("Migration error:", e)
+        db.session.rollback()
 
 BASE_LAYOUT = """
 <!DOCTYPE html>
