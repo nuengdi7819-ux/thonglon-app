@@ -20,7 +20,8 @@ class Transaction(db.Model):
     phone = db.Column(db.String(20), nullable=True)
     sales_name = db.Column(db.String(100), nullable=False)
     start_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
-    principal = db.Column(db.Float, nullable=False)      
+    original_principal = db.Column(db.Float, nullable=False, default=0.0)
+    principal = db.Column(db.Float, nullable=False)                      
     daily_interest = db.Column(db.Float, nullable=False)
     paid_interest = db.Column(db.Float, default=0.0)     
     status = db.Column(db.String(20), default='ปกติ')
@@ -62,6 +63,7 @@ BASE_LAYOUT = """
         <h2 class="mb-4 text-dark fw-bold">{% block header %}{% endblock %}</h2>
         {% block content %}{% endblock %}
     </div>
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
 </body>
 </html>
 """
@@ -73,13 +75,15 @@ def index():
         
     if request.method == 'POST':
         try:
+            p_val = float(request.form.get('principal', 0))
             new_tx = Transaction(
                 type=request.form.get('type'),
                 customer_name=request.form.get('customer_name'),
                 phone=request.form.get('phone'),
                 sales_name=request.form.get('sales_name'),
                 start_date=datetime.strptime(request.form.get('start_date'), '%Y-%m-%d').date() if request.form.get('start_date') else datetime.utcnow().date(),
-                principal=float(request.form.get('principal', 0)),
+                original_principal=p_val,
+                principal=p_val,
                 daily_interest=float(request.form.get('daily_interest', 0))
             )
             db.session.add(new_tx)
@@ -107,40 +111,85 @@ def index():
         tx.accumulated_interest = acc if acc > 0 else 0.0
 
     all_txs = Transaction.query.all()
-    total_investment = sum(tx.principal for tx in all_txs if tx.status != 'คืนแล้ว')
+    total_original_investment = sum(tx.original_principal for tx in all_txs)
+    total_current_principal = sum(tx.principal for tx in all_txs)
     total_profit = sum(tx.paid_interest for tx in all_txs)
 
     rows = ""
     for tx in transactions:
+        badge_color = 'bg-success'
+        if tx.status == 'ตัดยอดบางส่วน':
+            badge_color = 'bg-info text-dark'
+        elif tx.status == 'คืนแล้ว':
+            badge_color = 'bg-secondary'
+
         rows += f"""
         <tr>
             <td>{tx.customer_name}</td>
             <td>{tx.phone or '-'}</td>
             <td>{tx.sales_name}</td>
+            <td>{tx.original_principal:,.2f}</td>
             <td>{tx.principal:,.2f}</td>
             <td>{tx.daily_interest:,.2f}</td>
             <td>{tx.days_passed} วัน</td>
             <td>{tx.accumulated_interest:,.2f}</td>
-            <td><span class="badge {'bg-success' if tx.status=='ปกติ' else 'bg-warning'}">{tx.status}</span></td>
+            <td><span class="badge {badge_color}">{tx.status}</span></td>
             <td>
-                <form action="/update_payment/{tx.id}" method="POST" class="d-inline">
-                    <input type="hidden" name="payment_type" value="full">
-                    <button type="submit" class="btn btn-sm btn-success" onclick="return confirm('ยืนยันปิดยอด/คืนทั้งหมด?')">คืนครบ</button>
-                </form>
+                <button type="button" class="btn btn-sm btn-warning" data-bs-toggle="modal" data-bs-target="#payModal{tx.id}">จัดการยอด</button>
                 <a href="/delete_tx/{tx.id}" class="btn btn-sm btn-danger" onclick="return confirm('ยืนยันการลบ?')">ลบ</a>
             </td>
         </tr>
+
+        <!-- Modal จัดการยอดชำระ -->
+        <div class="modal fade" id="payModal{tx.id}" tabindex="-1">
+            <div class="modal-dialog">
+                <div class="modal-content">
+                    <form action="/update_payment/{tx.id}" method="POST">
+                        <div class="modal-header">
+                            <h5 class="modal-title">จัดการยอด: {tx.customer_name}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <p class="text-muted mb-1">เงินต้นคงเหลือ: <b>{tx.principal:,.2f} บาท</b></p>
+                            <p class="text-muted mb-3">ดอกเบี้ยสะสม: <b class="text-danger">{tx.accumulated_interest:,.2f} บาท</b></p>
+                            
+                            <div class="mb-3">
+                                <label class="form-label">เลือกประเภทการชำระ</label>
+                                <select name="payment_type" class="form-select" id="payType{tx.id}" onchange="togglePayInput({tx.id})" required>
+                                    <option value="partial">จ่ายบางส่วน (ตัดดอกเบี้ย / ตัดต้น)</option>
+                                    <option value="full">คืนครบทั้งหมด (ปิดบัญชี)</option>
+                                </select>
+                            </div>
+                            <div class="mb-3" id="amountDiv{tx.id}">
+                                <label class="form-label">จำนวนเงินที่รับชำระ (บาท)</label>
+                                <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                            <button type="submit" class="btn btn-dark">บันทึกการชำระ</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
         """
 
     content = f"""
     <div class="row mb-4">
-        <div class="col-md-6">
+        <div class="col-md-4">
             <div class="card p-3 shadow-sm bg-warning text-dark">
-                <h5>ยอดลงทุนรวม (เงินต้นค้าง)</h5>
-                <h3>{total_investment:,.2f} บาท</h3>
+                <h5>เงินลงทุนทั้งหมด</h5>
+                <h3>{total_original_investment:,.2f} บาท</h3>
             </div>
         </div>
-        <div class="col-md-6">
+        <div class="col-md-4">
+            <div class="card p-3 shadow-sm bg-info text-dark">
+                <h5>เงินต้นคงค้าง</h5>
+                <h3>{total_current_principal:,.2f} บาท</h3>
+            </div>
+        </div>
+        <div class="col-md-4">
             <div class="card p-3 shadow-sm bg-success text-white">
                 <h5>กำไรสะสมทั้งหมด</h5>
                 <h3>{total_profit:,.2f} บาท</h3>
@@ -169,9 +218,8 @@ def index():
             <div class="col-md-3">
                 <label class="form-label">เซลล์ผู้ดูแล</label>
                 <select name="sales_name" class="form-select" required>
-                    <option value="เซลล์ A">เซลล์ A</option>
-                    <option value="เซลล์ B">เซลล์ B</option>
-                    <option value="เซลล์ C">เซลล์ C</option>
+                    <option value="nueng">nueng</option>
+                    <option value="nice">nice</option>
                 </select>
             </div>
             <div class="col-md-3">
@@ -206,7 +254,8 @@ def index():
                     <th>ชื่อลูกค้า</th>
                     <th>เบอร์โทร</th>
                     <th>เซลล์</th>
-                    <th>เงินต้น</th>
+                    <th>เงินลงทุน</th>
+                    <th>ต้นคงค้าง</th>
                     <th>ดอกเบี้ย/วัน</th>
                     <th>เวลาผ่านไป</th>
                     <th>ดอกเบี้ยสะสม</th>
@@ -215,10 +264,22 @@ def index():
                 </tr>
             </thead>
             <tbody>
-                {rows if rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
+                {rows if rows else "<tr><td colspan='10' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
             </tbody>
         </table>
     </div>
+
+    <script>
+    function togglePayInput(id) {
+        let val = document.getElementById('payType' + id).value;
+        let div = document.getElementById('amountDiv' + id);
+        if(val === 'full') {
+            div.style.display = 'none';
+        } else {
+            div.style.display = 'block';
+        }
+    }
+    </script>
     """
 
     html = BASE_LAYOUT.replace('{% block header %}Dashboard{% endblock %}', 'Dashboard บริหารจัดการระบบ')
@@ -231,6 +292,8 @@ def update_payment(tx_id):
         return redirect(url_for('login'))
         
     tx = Transaction.query.get_or_404(tx_id)
+    payment_type = request.form.get('payment_type')
+    
     today = datetime.now().date()
     days = (today - tx.start_date).days
     if days < 1:
@@ -240,9 +303,28 @@ def update_payment(tx_id):
     if total_acc_interest < 0:
         total_acc_interest = 0.0
 
-    tx.paid_interest += total_acc_interest
-    tx.principal = 0.0
-    tx.status = 'คืนแล้ว'
+    if payment_type == 'full':
+        tx.paid_interest += total_acc_interest
+        tx.principal = 0.0
+        tx.status = 'คืนแล้ว'
+    else:
+        pay_amount = float(request.form.get('pay_amount', 0))
+        if pay_amount >= total_acc_interest:
+            remainder = pay_amount - total_acc_interest
+            tx.paid_interest += total_acc_interest
+            if remainder > 0:
+                tx.principal -= remainder
+                if tx.principal < 0:
+                    tx.principal = 0.0
+        else:
+            tx.paid_interest += pay_amount
+            
+        if tx.principal <= 0:
+            tx.status = 'คืนแล้ว'
+            tx.principal = 0.0
+        else:
+            tx.status = 'ตัดยอดบางส่วน'
+
     db.session.commit()
     return redirect(url_for('index'))
 
@@ -261,14 +343,14 @@ def members():
         return redirect(url_for('login'))
     
     txs = Transaction.query.all()
-    rows = "".join([f"<tr><td>{t.customer_name}</td><td>{t.phone or '-'}</td><td>{t.sales_name}</td><td>{t.principal:,.2f}</td><td>{t.status}</td></tr>" for t in txs])
+    rows = "".join([f"<tr><td>{t.customer_name}</td><td>{t.phone or '-'}</td><td>{t.sales_name}</td><td>{t.original_principal:,.2f}</td><td>{t.principal:,.2f}</td><td>{t.status}</td></tr>" for t in txs])
     
     content = f"""
     <div class="card p-4 shadow-sm">
         <h4 class="mb-3">รายชื่อสมาชิกทั้งหมด</h4>
         <table class="table table-striped">
-            <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เซลล์ผู้ดูแล</th><th>เงินต้น</th><th>สถานะ</th></tr></thead>
-            <tbody>{rows if rows else "<tr><td colspan='5' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
+            <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เซลล์ผู้ดูแล</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>สถานะ</th></tr></thead>
+            <tbody>{rows if rows else "<tr><td colspan='6' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
         </table>
     </div>
     """
@@ -289,13 +371,13 @@ def sales_members():
 
     sales_content = ""
     for sales, txs in sales_data.items():
-        sub_rows = "".join([f"<tr><td>{t.customer_name}</td><td>{t.phone or '-'}</td><td>{t.principal:,.2f}</td><td>{t.status}</td></tr>" for t in txs])
+        sub_rows = "".join([f"<tr><td>{t.customer_name}</td><td>{t.phone or '-'}</td><td>{t.original_principal:,.2f}</td><td>{t.principal:,.2f}</td><td>{t.status}</td></tr>" for t in txs])
         sales_content += f"""
         <div class="card mb-4 shadow-sm">
             <div class="card-header bg-dark text-white"><h5 class="mb-0">เซลล์: {sales}</h5></div>
             <div class="card-body">
                 <table class="table table-striped">
-                    <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เงินต้น</th><th>สถานะ</th></tr></thead>
+                    <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>สถานะ</th></tr></thead>
                     <tbody>{sub_rows}</tbody>
                 </table>
             </div>
