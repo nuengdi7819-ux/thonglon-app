@@ -64,6 +64,19 @@ BASE_LAYOUT = """
         {% block content %}{% endblock %}
     </div>
     <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+    <script>
+    function togglePayInput(id) {
+        let selectElem = document.getElementById('payType' + id);
+        let divElem = document.getElementById('amountDiv' + id);
+        if (selectElem && divElem) {
+            if (selectElem.value === 'full') {
+                divElem.style.display = 'none';
+            } else {
+                divElem.style.display = 'block';
+            }
+        }
+    }
+    </script>
 </body>
 </html>
 """
@@ -268,18 +281,6 @@ def index():
             </tbody>
         </table>
     </div>
-
-    <script>
-    function togglePayInput(id) {
-        let val = document.getElementById('payType' + id).value;
-        let div = document.getElementById('amountDiv' + id);
-        if(val === 'full') {
-            div.style.display = 'none';
-        } else {
-            div.style.display = 'block';
-        }
-    }
-    </script>
     """
 
     html = BASE_LAYOUT.replace('{% block header %}Dashboard{% endblock %}', 'Dashboard บริหารจัดการระบบ')
