@@ -1,6 +1,7 @@
 from flask import Flask, render_template_string, request, redirect, url_for, session
 from flask_sqlalchemy import SQLAlchemy
 from datetime import datetime
+from collections import defaultdict
 import traceback
 
 app = Flask(__name__)
@@ -20,6 +21,7 @@ class Transaction(db.Model):
     phone = db.Column(db.String(20), nullable=True)
     sales_name = db.Column(db.String(100), nullable=False)
     start_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    last_payment_date = db.Column(db.Date, nullable=True)
     original_principal = db.Column(db.Float, nullable=False, default=0.0)
     principal = db.Column(db.Float, nullable=False)                      
     daily_interest = db.Column(db.Float, nullable=False)
@@ -44,6 +46,7 @@ BASE_LAYOUT = """
         .main-content { margin-left: 260px; padding: 30px; }
         .nav-link { color: #333; font-weight: 500; padding: 10px 20px; border-radius: 6px; margin-bottom: 5px; }
         .nav-link:hover, .nav-link.active { background-color: #ffc107; color: #000; }
+        .sub-menu { padding-left: 20px; font-size: 0.95rem; }
     </style>
 </head>
 <body>
@@ -54,6 +57,8 @@ BASE_LAYOUT = """
             <li><a href="/members" class="nav-link {% if page == 'members' %}active{% endif %}">👥 1. สมาชิกทั้งหมด</a></li>
             <li><a href="/sales_members" class="nav-link {% if page == 'sales' %}active{% endif %}">📋 2. สมาชิกภายใต้เซลล์</a></li>
             <li><a href="/customer_summary" class="nav-link {% if page == 'customer' %}active{% endif %}">📂 3. สรุปลูกค้า</a></li>
+            <li><a href="/customer_emergency" class="nav-link sub-menu {% if page == 'emergency' %}active{% endif %}">🔸 3.1 เงินฉุกเฉิน</a></li>
+            <li><a href="/customer_gold" class="nav-link sub-menu {% if page == 'gold' %}active{% endif %}">🔸 3.2 ผ่อนทอง</a></li>
             <li><a href="/monthly_summary" class="nav-link {% if page == 'monthly' %}active{% endif %}">📅 4. สรุปยอดรายเดือน</a></li>
         </ul>
         <hr>
@@ -122,6 +127,7 @@ def index():
         tx.days_passed = days
         acc = (tx.daily_interest * days) - tx.paid_interest
         tx.accumulated_interest = acc if acc > 0 else 0.0
+        tx.total_paid = (tx.original_principal - tx.principal) + tx.paid_interest
 
     all_txs = Transaction.query.all()
     total_original_investment = sum(tx.original_principal for tx in all_txs)
@@ -136,13 +142,19 @@ def index():
         elif tx.status == 'คืนแล้ว':
             badge_color = 'bg-secondary'
 
+        start_date_str = tx.start_date.strftime('%d/%m/%Y') if tx.start_date else '-'
+        last_pay_str = tx.last_payment_date.strftime('%d/%m/%Y') if tx.last_payment_date else '-'
+
         rows += f"""
         <tr>
             <td>{tx.customer_name}</td>
             <td>{tx.phone or '-'}</td>
             <td>{tx.sales_name}</td>
+            <td>{start_date_str}</td>
+            <td>{last_pay_str}</td>
             <td>{tx.original_principal:,.2f}</td>
             <td>{tx.principal:,.2f}</td>
+            <td><strong class="text-primary">{tx.total_paid:,.2f}</strong></td>
             <td>{tx.daily_interest:,.2f}</td>
             <td>{tx.days_passed} วัน</td>
             <td>{tx.accumulated_interest:,.2f}</td>
@@ -236,7 +248,7 @@ def index():
                 </select>
             </div>
             <div class="col-md-3">
-                <label class="form-label">วันที่เริ่ม</label>
+                <label class="form-label">วันที่เริ่ม (วันที่กู้)</label>
                 <input type="date" name="start_date" class="form-control" value="{datetime.now().strftime('%Y-%m-%d')}" required>
             </div>
             <div class="col-md-3">
@@ -261,25 +273,30 @@ def index():
                 <button type="submit" class="btn btn-sm btn-outline-dark">ค้นหา</button>
             </form>
         </div>
-        <table class="table table-striped align-middle">
-            <thead>
-                <tr>
-                    <th>ชื่อลูกค้า</th>
-                    <th>เบอร์โทร</th>
-                    <th>เซลล์</th>
-                    <th>เงินลงทุน</th>
-                    <th>ต้นคงค้าง</th>
-                    <th>ดอกเบี้ย/วัน</th>
-                    <th>เวลาผ่านไป</th>
-                    <th>ดอกเบี้ยสะสม</th>
-                    <th>สถานะ</th>
-                    <th>จัดการ</th>
-                </tr>
-            </thead>
-            <tbody>
-                {rows if rows else "<tr><td colspan='10' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
-            </tbody>
-        </table>
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>ชื่อลูกค้า</th>
+                        <th>เบอร์โทร</th>
+                        <th>เซลล์</th>
+                        <th>วันที่กู้</th>
+                        <th>ชำระล่าสุด</th>
+                        <th>เงินลงทุน</th>
+                        <th>ต้นคงค้าง</th>
+                        <th>ยอดที่ชำระมาแล้ว</th>
+                        <th>ดอกเบี้ย/วัน</th>
+                        <th>เวลาผ่านไป</th>
+                        <th>ดอกเบี้ยสะสม</th>
+                        <th>สถานะ</th>
+                        <th>จัดการ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {rows if rows else "<tr><td colspan='13' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
+                </tbody>
+            </table>
+        </div>
     </div>
     """
 
@@ -326,6 +343,7 @@ def update_payment(tx_id):
         else:
             tx.status = 'ตัดยอดบางส่วน'
 
+    tx.last_payment_date = today
     db.session.commit()
     return redirect(url_for('index'))
 
@@ -344,14 +362,28 @@ def members():
         return redirect(url_for('login'))
     
     txs = Transaction.query.all()
-    rows = "".join([f"<tr><td>{t.customer_name}</td><td>{t.phone or '-'}</td><td>{t.sales_name}</td><td>{t.original_principal:,.2f}</td><td>{t.principal:,.2f}</td><td>{t.status}</td></tr>" for t in txs])
+    rows = ""
+    for t in txs:
+        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        rows += f"""
+        <tr>
+            <td>{t.customer_name}</td>
+            <td>{t.phone or '-'}</td>
+            <td>{t.sales_name}</td>
+            <td>{t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'}</td>
+            <td>{t.original_principal:,.2f}</td>
+            <td>{t.principal:,.2f}</td>
+            <td><strong>{total_paid:,.2f}</strong></td>
+            <td>{t.status}</td>
+        </tr>
+        """
     
     content = f"""
     <div class="card p-4 shadow-sm">
         <h4 class="mb-3">รายชื่อสมาชิกทั้งหมด</h4>
         <table class="table table-striped">
-            <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เซลล์ผู้ดูแล</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>สถานะ</th></tr></thead>
-            <tbody>{rows if rows else "<tr><td colspan='6' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
+            <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เซลล์ผู้ดูแล</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
+            <tbody>{rows if rows else "<tr><td colspan='8' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
         </table>
     </div>
     """
@@ -372,13 +404,26 @@ def sales_members():
 
     sales_content = ""
     for sales, txs in sales_data.items():
-        sub_rows = "".join([f"<tr><td>{t.customer_name}</td><td>{t.phone or '-'}</td><td>{t.original_principal:,.2f}</td><td>{t.principal:,.2f}</td><td>{t.status}</td></tr>" for t in txs])
+        sub_rows = ""
+        for t in txs:
+            total_paid = (t.original_principal - t.principal) + t.paid_interest
+            sub_rows += f"""
+            <tr>
+                <td>{t.customer_name}</td>
+                <td>{t.phone or '-'}</td>
+                <td>{t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'}</td>
+                <td>{t.original_principal:,.2f}</td>
+                <td>{t.principal:,.2f}</td>
+                <td><strong>{total_paid:,.2f}</strong></td>
+                <td>{t.status}</td>
+            </tr>
+            """
         sales_content += f"""
         <div class="card mb-4 shadow-sm">
             <div class="card-header bg-dark text-white"><h5 class="mb-0">เซลล์: {sales}</h5></div>
             <div class="card-body">
                 <table class="table table-striped">
-                    <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>สถานะ</th></tr></thead>
+                    <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
                     <tbody>{sub_rows}</tbody>
                 </table>
             </div>
@@ -394,30 +439,216 @@ def customer_summary():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    content = """
+    txs = Transaction.query.all()
+    customer_rows = ""
+    for t in txs:
+        start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
+        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        customer_rows += f"""
+        <tr>
+            <td>{t.customer_name}</td>
+            <td>{t.phone or '-'}</td>
+            <td>{t.sales_name}</td>
+            <td>{t.type}</td>
+            <td>{start_str}</td>
+            <td>{t.original_principal:,.2f}</td>
+            <td>{t.principal:,.2f}</td>
+            <td><strong>{total_paid:,.2f}</strong></td>
+            <td>{t.paid_interest:,.2f}</td>
+            <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
+        </tr>
+        """
+
+    content = f"""
     <div class="card p-4 shadow-sm">
-        <h4 class="mb-3">สรุปข้อมูลลูกค้า</h4>
-        <p class="text-muted">หน้ารายละเอียดและประวัติการทำรายการของลูกค้าแต่ละราย</p>
+        <h4 class="mb-3">สรุปข้อมูลลูกค้าทั้งหมด</h4>
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>ชื่อลูกค้า</th>
+                        <th>เบอร์โทร</th>
+                        <th>เซลล์ผู้ดูแล</th>
+                        <th>ประเภท</th>
+                        <th>วันที่กู้</th>
+                        <th>เงินลงทุน</th>
+                        <th>ต้นคงค้าง</th>
+                        <th>ยอดที่ชำระมาแล้ว</th>
+                        <th>กำไรสะสม</th>
+                        <th>สถานะ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {customer_rows if customer_rows else "<tr><td colspan='10' class='text-center text-muted'>ยังไม่มีข้อมูลสรุปลูกค้า</td></tr>"}
+                </tbody>
+            </table>
+        </div>
     </div>
     """
     html = BASE_LAYOUT.replace('{% block header %}3. สรุปลูกค้า{% endblock %}', 'สรุปลูกค้า').replace('{% block content %}{% endblock %}', content)
     return render_template_string(html, title="สรุปลูกค้า", page="customer")
+
+@app.route('/customer_emergency')
+def customer_emergency():
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+    
+    txs = Transaction.query.filter_by(type='เงินฉุกเฉิน').all()
+    customer_rows = ""
+    for t in txs:
+        start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
+        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        customer_rows += f"""
+        <tr>
+            <td>{t.customer_name}</td>
+            <td>{t.phone or '-'}</td>
+            <td>{t.sales_name}</td>
+            <td>{start_str}</td>
+            <td>{t.original_principal:,.2f}</td>
+            <td>{t.principal:,.2f}</td>
+            <td><strong>{total_paid:,.2f}</strong></td>
+            <td>{t.paid_interest:,.2f}</td>
+            <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
+        </tr>
+        """
+
+    content = f"""
+    <div class="card p-4 shadow-sm">
+        <h4 class="mb-3">สรุปข้อมูลลูกค้า: เงินฉุกเฉิน</h4>
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>ชื่อลูกค้า</th>
+                        <th>เบอร์โทร</th>
+                        <th>เซลล์ผู้ดูแล</th>
+                        <th>วันที่กู้</th>
+                        <th>เงินลงทุน</th>
+                        <th>ต้นคงค้าง</th>
+                        <th>ยอดที่ชำระมาแล้ว</th>
+                        <th>กำไรสะสม</th>
+                        <th>สถานะ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {customer_rows if customer_rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลเงินฉุกเฉิน</td></tr>"}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+    html = BASE_LAYOUT.replace('{% block header %}3.1 เงินฉุกเฉิน{% endblock %}', 'เงินฉุกเฉิน').replace('{% block content %}{% endblock %}', content)
+    return render_template_string(html, title="เงินฉุกเฉิน", page="emergency")
+
+@app.route('/customer_gold')
+def customer_gold():
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+    
+    txs = Transaction.query.filter_by(type='ผ่อนทอง').all()
+    customer_rows = ""
+    for t in txs:
+        start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
+        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        customer_rows += f"""
+        <tr>
+            <td>{t.customer_name}</td>
+            <td>{t.phone or '-'}</td>
+            <td>{t.sales_name}</td>
+            <td>{start_str}</td>
+            <td>{t.original_principal:,.2f}</td>
+            <td>{t.principal:,.2f}</td>
+            <td><strong>{total_paid:,.2f}</strong></td>
+            <td>{t.paid_interest:,.2f}</td>
+            <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
+        </tr>
+        """
+
+    content = f"""
+    <div class="card p-4 shadow-sm">
+        <h4 class="mb-3">สรุปข้อมูลลูกค้า: ผ่อนทอง</h4>
+        <div class="table-responsive">
+            <table class="table table-striped align-middle">
+                <thead>
+                    <tr>
+                        <th>ชื่อลูกค้า</th>
+                        <th>เบอร์โทร</th>
+                        <th>เซลล์ผู้ดูแล</th>
+                        <th>วันที่กู้</th>
+                        <th>เงินลงทุน</th>
+                        <th>ต้นคงค้าง</th>
+                        <th>ยอดที่ชำระมาแล้ว</th>
+                        <th>กำไรสะสม</th>
+                        <th>สถานะ</th>
+                    </tr>
+                </thead>
+                <tbody>
+                    {customer_rows if customer_rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลผ่อนทอง</td></tr>"}
+                </tbody>
+            </table>
+        </div>
+    </div>
+    """
+    html = BASE_LAYOUT.replace('{% block header %}3.2 ผ่อนทอง{% endblock %}', 'ผ่อนทอง').replace('{% block content %}{% endblock %}', content)
+    return render_template_string(html, title="ผ่อนทอง", page="gold")
 
 @app.route('/monthly_summary')
 def monthly_summary():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    content = """
+    all_txs = Transaction.query.all()
+    monthly_data = defaultdict(lambda: {'count': 0, 'investment': 0.0, 'profit': 0.0, 'pending': 0.0})
+    
+    today = datetime.now().date()
+    for tx in all_txs:
+        if tx.start_date:
+            ym = tx.start_date.strftime('%Y-%m')
+            monthly_data[ym]['count'] += 1
+            monthly_data[ym]['investment'] += tx.original_principal
+            monthly_data[ym]['profit'] += tx.paid_interest
+            
+            days = (today - tx.start_date).days
+            if days < 1:
+                days = 1
+            acc = (tx.daily_interest * days) - tx.paid_interest
+            pending_interest = acc if acc > 0 else 0.0
+            monthly_data[ym]['pending'] += (tx.principal + pending_interest)
+
+    sorted_months = sorted(monthly_data.keys(), reverse=True)
+    monthly_rows = ""
+    for ym in sorted_months:
+        d = monthly_data[ym]
+        monthly_rows += f"""
+        <tr>
+            <td>{ym}</td>
+            <td>{d['count']} รายการ</td>
+            <td>{d['investment']:,.2f}</td>
+            <td>{d['profit']:,.2f}</td>
+            <td>{d['pending']:,.2f}</td>
+        </tr>
+        """
+
+    content = f"""
     <div class="card p-4 shadow-sm">
         <h4 class="mb-3">สรุปยอดผลประกอบการรายเดือน</h4>
         <table class="table table-bordered">
-            <thead class="table-dark"><tr><th>ประจำเดือน (Year-Month)</th><th>จำนวนรายการ</th><th>ทุนที่ใช้เดือนนี้ (บาท)</th><th>กำไรเดือนนี้ (บาท)</th><th>ยอดรอเก็บรวม (บาท)</th></tr></thead>
-            <tbody><tr><td colspan="5" class="text-center text-muted">ยังไม่มีข้อมูลสรุปยอดรายเดือน</td></tr></tbody>
+            <thead class="table-dark">
+                <tr>
+                    <th>ประจำเดือน (Year-Month)</th>
+                    <th>จำนวนรายการ</th>
+                    <th>ทุนที่ใช้เดือนนี้ (บาท)</th>
+                    <th>กำไรเดือนนี้ (บาท)</th>
+                    <th>ยอดรอเก็บรวม (บาท)</th>
+                </tr>
+            </thead>
+            <tbody>
+                {monthly_rows if monthly_rows else "<tr><td colspan='5' class='text-center text-muted'>ยังไม่มีข้อมูลสรุปยอดรายเดือน</td></tr>"}
+            </tbody>
         </table>
     </div>
     """
-    html = BASE_LAYOUT.replace('{% block header %}4. สรุปยอดรายเดือน{% endblock %}', 'สรุปยอดรายเดือน').replace('{% block content %}{% endblock %}', content)
+    html = BASE_LAYOUT.replace('{% block header %}4. สรุปยอดผลประกอบการรายเดือน{% endblock %}', 'สรุปยอดรายเดือน').replace('{% block content %}{% endblock %}', content)
     return render_template_string(html, title="สรุปยอดรายเดือน", page="monthly")
 
 @app.route('/login', methods=['GET', 'POST'])
