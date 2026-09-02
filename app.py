@@ -973,7 +973,9 @@ def login():
         <div class="card p-4 shadow-lg w-100" style="max-width: 380px;">
             <h3 class="text-center mb-1 text-danger fw-bold">🔱 ทองล้น</h3>
             <p class="text-center text-muted small mb-4">ระบบบริหารจัดการการเงิน</p>
-            {% if error %}<div class="alert alert-danger py-2 text-center">{{ error }}</div>{% error_endif %}
+            {% if error %}
+                <div class="alert alert-danger py-2 text-center">{{ error }}</div>
+            {% endif %}
             <form method="POST">
                 <div class="mb-3"><label class="form-label">ชื่อผู้ใช้งาน:</label><input type="text" name="username" class="form-control" required></div>
                 <div class="mb-3"><label class="form-label">รหัสผ่าน:</label><input type="password" name="password" class="form-control" required></div>
