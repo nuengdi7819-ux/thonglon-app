@@ -99,7 +99,7 @@ BASE_LAYOUT = """
             <li><a href="/customer_emergency" class="nav-link sub-menu {% if page == 'emergency' %}active{% endif %}" onclick="toggleSidebar()">🔸 3.1 เงินฉุกเฉิน</a></li>
             <li><a href="/customer_gold" class="nav-link sub-menu {% if page == 'gold' %}active{% endif %}" onclick="toggleSidebar()">🔸 3.2 ผ่อนทอง</a></li>
             <li><a href="/customer_debt" class="nav-link sub-menu {% if page == 'debt' %}active{% endif %}" onclick="toggleSidebar()">🔸 3.3 ยอดค้างเก่า</a></li>
-            <li><a href="/monthly_summary" class="nav-link {% if page == 'monthly' %}active{% endif %}" onclick="toggleSidebar()">📅 4. สรุปยอดรายเดือน</a></li>
+            <li><a href="/monthly_summary" class="nav-link sub-menu {% if page == 'monthly' %}active{% endif %}" onclick="toggleSidebar()">📅 4. สรุปยอดรายเดือน</a></li>
         </ul>
         <hr class="border-secondary">
         <div class="d-flex flex-column gap-2">
@@ -149,6 +149,7 @@ def index():
             custom_start_date = request.form.get('start_date')
             parsed_date = datetime.strptime(custom_start_date, '%Y-%m-%d').date() if custom_start_date else datetime.utcnow().date()
             current_sales = session.get('admin', 'unknown')
+            d_interest = float(request.form.get('daily_interest', 0))
 
             new_tx = Transaction(
                 type=request.form.get('type'),
@@ -158,7 +159,7 @@ def index():
                 start_date=parsed_date,
                 original_principal=p_val,
                 principal=p_val,
-                daily_interest=float(request.form.get('daily_interest', 0))
+                daily_interest=d_interest
             )
             db.session.add(new_tx)
             db.session.commit()
@@ -177,13 +178,19 @@ def index():
 
     today = datetime.now().date()
     for tx in transactions:
-        days = (today - tx.start_date).days
-        if days < 1:
-            days = 1
-        tx.days_passed = days
-        acc = (tx.daily_interest * days) - tx.paid_interest
-        tx.accumulated_interest = acc if acc > 0 else 0.0
-        tx.total_paid = (tx.original_principal - tx.principal) + tx.paid_interest
+        if tx.type == 'ยอดค้างเก่า':
+            # ยอดค้างเก่า: ไม่มีดอกเบี้ยรายวัน เวลา/ดอกเบี้ยสะสมเป็นขีด
+            tx.days_passed = '-'
+            tx.accumulated_interest = 0.0
+            tx.total_paid = tx.original_principal - tx.principal
+        else:
+            days = (today - tx.start_date).days
+            if days < 1:
+                days = 1
+            tx.days_passed = f"{days} วัน"
+            acc = (tx.daily_interest * days) - tx.paid_interest
+            tx.accumulated_interest = acc if acc > 0 else 0.0
+            tx.total_paid = (tx.original_principal - tx.principal) + tx.paid_interest
 
     all_txs = Transaction.query.all()
     total_original_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
@@ -201,7 +208,46 @@ def index():
         start_date_str = tx.start_date.strftime('%d/%m/%Y') if tx.start_date else '-'
         last_pay_str = tx.last_payment_date.strftime('%d/%m/%Y') if tx.last_payment_date else '-'
 
-        # ตารางหน้า Dashboard ตัดคอลัมน์เซลล์ออกแล้ว
+        if tx.type == 'ยอดค้างเก่า':
+            display_daily_interest = '-'
+            display_days = '-'
+            display_acc_interest = '-'
+            display_total_paid = f"{tx.total_paid:,.2f}"
+            modal_body_content = f"""
+                            <p class="text-muted mb-1">ยอดค้างคงเหลือ: <b>{tx.principal:,.2f} บาท</b></p>
+                            <div class="mb-3">
+                                <label class="form-label">เลือกประเภทการชำระ</label>
+                                <select name="payment_type" class="form-select" id="payType{tx.id}" onchange="togglePayInput({tx.id})" required>
+                                    <option value="partial">จ่ายตัดยอดบางส่วน</option>
+                                    <option value="full">ปิดยอดทั้งหมด (ชำระครบ)</option>
+                                </select>
+                            </div>
+                            <div class="mb-3" id="amountDiv{tx.id}">
+                                <label class="form-label">จำนวนเงินที่ชำระ (เข้ากำไรสะสมทันที) (บาท)</label>
+                                <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
+                            </div>
+            """
+        else:
+            display_daily_interest = f"{tx.daily_interest:,.2f}"
+            display_days = tx.days_passed
+            display_acc_interest = f"{tx.accumulated_interest:,.2f}"
+            display_total_paid = f"{tx.total_paid:,.2f}"
+            modal_body_content = f"""
+                            <p class="text-muted mb-1">เงินต้นคงเหลือ: <b>{tx.principal:,.2f} บาท</b></p>
+                            <p class="text-muted mb-3">ดอกเบี้ยสะสม: <b class="text-danger">{tx.accumulated_interest:,.2f} บาท</b></p>
+                            <div class="mb-3">
+                                <label class="form-label">เลือกประเภทการชำระ</label>
+                                <select name="payment_type" class="form-select" id="payType{tx.id}" onchange="togglePayInput({tx.id})" required>
+                                    <option value="partial">จ่ายบางส่วน (ตัดดอกเบี้ย / ตัดต้น)</option>
+                                    <option value="full">คืนครบทั้งหมด (ปิดบัญชี)</option>
+                                </select>
+                            </div>
+                            <div class="mb-3" id="amountDiv{tx.id}">
+                                <label class="form-label">จำนวนเงินที่รับชำระ (บาท)</label>
+                                <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
+                            </div>
+            """
+
         rows += f"""
         <tr>
             <td>{tx.customer_name}</td>
@@ -211,10 +257,10 @@ def index():
             <td>{last_pay_str}</td>
             <td>{tx.original_principal:,.2f}</td>
             <td>{tx.principal:,.2f}</td>
-            <td><strong class="text-primary">{tx.total_paid:,.2f}</strong></td>
-            <td>{tx.daily_interest:,.2f}</td>
-            <td>{tx.days_passed} วัน</td>
-            <td>{tx.accumulated_interest:,.2f}</td>
+            <td><strong class="text-primary">{display_total_paid}</strong></td>
+            <td>{display_daily_interest}</td>
+            <td>{display_days}</td>
+            <td>{display_acc_interest}</td>
             <td><span class="badge {badge_color}">{tx.status}</span></td>
             <td>
                 <div class="d-flex flex-column gap-2" style="width: 90px;">
@@ -234,20 +280,7 @@ def index():
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p class="text-muted mb-1">เงินต้นคงเหลือ: <b>{tx.principal:,.2f} บาท</b></p>
-                            <p class="text-muted mb-3">ดอกเบี้ยสะสม: <b class="text-danger">{tx.accumulated_interest:,.2f} บาท</b></p>
-                            
-                            <div class="mb-3">
-                                <label class="form-label">เลือกประเภทการชำระ</label>
-                                <select name="payment_type" class="form-select" id="payType{tx.id}" onchange="togglePayInput({tx.id})" required>
-                                    <option value="partial">จ่ายบางส่วน (ตัดดอกเบี้ย / ตัดต้น)</option>
-                                    <option value="full">คืนครบทั้งหมด (ปิดบัญชี)</option>
-                                </select>
-                            </div>
-                            <div class="mb-3" id="amountDiv{tx.id}">
-                                <label class="form-label">จำนวนเงินที่รับชำระ (บาท)</label>
-                                <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
-                            </div>
+                            {modal_body_content}
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
@@ -301,7 +334,7 @@ def index():
                 <input type="text" name="phone" class="form-control">
             </div>
             <div class="col-md-3">
-                <label class="form-label">วันที่กู้ (เลือกย้อนหลังได้)</label>
+                <label class="form-label">วันที่กู้/วันที่เริ่ม (ย้อนหลังได้)</label>
                 <input type="date" name="start_date" class="form-control" value="{datetime.now().strftime('%Y-%m-%d')}" required>
             </div>
             <div class="col-md-4">
@@ -309,8 +342,8 @@ def index():
                 <input type="number" step="any" name="principal" class="form-control" required>
             </div>
             <div class="col-md-4">
-                <label class="form-label">ดอกเบี้ย/วัน (บาท)</label>
-                <input type="number" step="any" name="daily_interest" class="form-control" required>
+                <label class="form-label">ดอกเบี้ย/วัน (สำหรับยอดค้างเก่าใส่ 0)</label>
+                <input type="number" step="any" name="daily_interest" class="form-control" value="0" required>
             </div>
             <div class="col-md-4 d-flex align-items-end">
                 <button type="submit" class="btn btn-success w-100 fw-bold">บันทึกข้อมูล</button>
@@ -384,37 +417,55 @@ def update_payment(tx_id):
         
     tx = Transaction.query.get_or_404(tx_id)
     payment_type = request.form.get('payment_type')
-    
     today = datetime.now().date()
-    days = (today - tx.start_date).days
-    if days < 1:
-        days = 1
-        
-    total_acc_interest = (tx.daily_interest * days) - tx.paid_interest
-    if total_acc_interest < 0:
-        total_acc_interest = 0.0
-
-    if payment_type == 'full':
-        tx.paid_interest += total_acc_interest
-        tx.principal = 0.0
-        tx.status = 'คืนแล้ว'
-    else:
-        pay_amount = float(request.form.get('pay_amount', 0))
-        if pay_amount >= total_acc_interest:
-            remainder = pay_amount - total_acc_interest
-            tx.paid_interest += total_acc_interest
-            if remainder > 0:
-                tx.principal -= remainder
-                if tx.principal < 0:
-                    tx.principal = 0.0
+    
+    if tx.type == 'ยอดค้างเก่า':
+        # ยอดค้างเก่า: จ่ายเข้ามานับเป็นกำไร (paid_interest) ทั้งหมดทันที และไปตัดยอดค้าง (principal) ลดลง
+        if payment_type == 'full':
+            pay_amount = tx.principal
         else:
-            tx.paid_interest += pay_amount
+            pay_amount = float(request.form.get('pay_amount', 0))
             
+        if pay_amount > tx.principal:
+            pay_amount = tx.principal
+            
+        tx.paid_interest += pay_amount
+        tx.principal -= pay_amount
         if tx.principal <= 0:
-            tx.status = 'คืนแล้ว'
             tx.principal = 0.0
+            tx.status = 'คืนแล้ว'
         else:
             tx.status = 'ตัดยอดบางส่วน'
+    else:
+        days = (today - tx.start_date).days
+        if days < 1:
+            days = 1
+            
+        total_acc_interest = (tx.daily_interest * days) - tx.paid_interest
+        if total_acc_interest < 0:
+            total_acc_interest = 0.0
+
+        if payment_type == 'full':
+            tx.paid_interest += total_acc_interest
+            tx.principal = 0.0
+            tx.status = 'คืนแล้ว'
+        else:
+            pay_amount = float(request.form.get('pay_amount', 0))
+            if pay_amount >= total_acc_interest:
+                remainder = pay_amount - total_acc_interest
+                tx.paid_interest += total_acc_interest
+                if remainder > 0:
+                    tx.principal -= remainder
+                    if tx.principal < 0:
+                        tx.principal = 0.0
+            else:
+                tx.paid_interest += pay_amount
+                
+            if tx.principal <= 0:
+                tx.status = 'คืนแล้ว'
+                tx.principal = 0.0
+            else:
+                tx.status = 'ตัดยอดบางส่วน'
 
     tx.last_payment_date = today
     db.session.commit()
@@ -682,7 +733,7 @@ def customer_debt():
     customer_rows = ""
     for t in txs:
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
-        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        total_paid = t.original_principal - t.principal
         customer_rows += f"""
         <tr>
             <td>{t.customer_name}</td>
@@ -711,7 +762,7 @@ def customer_debt():
                         <th>ยอดค้างตั้งต้น</th>
                         <th>ยอดค้างคงเหลือ</th>
                         <th>เก็บเงินได้แล้ว</th>
-                        <th>ดอกเบี้ยสะสม</th>
+                        <th>ยอดเก็บสะสมเข้ากำไร</th>
                         <th>สถานะ</th>
                     </tr>
                 </thead>
