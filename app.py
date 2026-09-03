@@ -238,12 +238,11 @@ def index():
     total_debt_principal = sum(tx.principal for tx in all_txs if tx.type == 'ยอดค้างเก่า')
     total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     
-    # กำไรสะสมทั้งหมด (สำหรับยอดค้างเก่า ให้นับยอดที่เก็บได้แล้วทั้งหมดเป็นกำไรทันที)
+    # กำไรสะสมทั้งหมด (ยอดค้างเก่าที่เก็บได้แล้วนับเป็นกำไร + ดอกเบี้ยสะสมของเงินใหม่)
     total_profit = sum(
         ((tx.original_principal - tx.principal) + tx.paid_interest) if tx.type == 'ยอดค้างเก่า' else tx.paid_interest 
         for tx in all_txs
     )
-    total_collected_overall = sum(((tx.original_principal - tx.principal) + tx.paid_interest) for tx in all_txs)
 
     rows = ""
     modals_html = ""
@@ -354,12 +353,6 @@ def index():
             <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #b30000, #ff4d4d);">
                 <h5>💼 เงินต้นคงค้าง</h5>
                 <h3>{total_new_principal:,.2f} บาท</h3>
-            </div>
-        </div>
-        <div class="col-md mb-3">
-            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #581c87, #9333ea);">
-                <h5>💸 ยอดที่ชำระมาแล้ว</h5>
-                <h3>{total_collected_overall:,.2f} บาท</h3>
             </div>
         </div>
         <div class="col-md mb-3">
