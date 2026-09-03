@@ -307,6 +307,18 @@ def index():
                                 <label class="form-label text-danger">ส่วนลด (ถ้ามี / บาท)</label>
                                 <input type="number" step="any" name="discount_amount" class="form-control" value="0" placeholder="กรอกส่วนลด">
                             </div>
+                            <div class="mb-3">
+                                <label class="form-label text-warning text-dark fw-bold">เบี้ยค่าปรับ (บาท)</label>
+                                <input type="number" step="any" name="fine_amount" class="form-control" value="0" placeholder="กรอกค่าปรับ">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-success fw-bold">ปรับเปลี่ยนสถานะรายการ</label>
+                                <select name="new_status" class="form-select border-success">
+                                    <option value="ปกติ" {"selected" if tx.status == "ปกติ" else ""}>ปกติ</option>
+                                    <option value="ตัดยอดบางส่วน" {"selected" if tx.status == "ตัดยอดบางส่วน" else ""}>ตัดยอดบางส่วน</option>
+                                    <option value="คืนแล้ว" {"selected" if tx.status == "คืนแล้ว" else ""}>คืนแล้ว</option>
+                                </select>
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
@@ -435,7 +447,6 @@ def export_data():
     
     si = io.StringIO()
     cw = csv.writer(si)
-    # เพิ่มคอลัมน์ TotalPaid (ยอดที่ชำระมาแล้ว) เข้าไปในไฟล์ CSV ด้วย
     cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status', 'InstallmentAmount', 'TotalPaid'])
     
     txs = Transaction.query.all()
@@ -499,6 +510,8 @@ def update_payment(tx_id):
     payment_type = request.form.get('payment_type')
     today = datetime.now().date()
     discount_amt = float(request.form.get('discount_amount', 0))
+    fine_amt = float(request.form.get('fine_amount', 0))
+    new_status = request.form.get('new_status')
     
     days = (today - tx.start_date).days
     if days < 1:
@@ -511,14 +524,17 @@ def update_payment(tx_id):
     if payment_type == 'full':
         pay_amount = total_acc_interest
         discount_amt = 0.0
-        tx.paid_interest += pay_amount
+        # ถือว่าค่าปรับถูกชำระรวมเข้ามาด้วย
+        tx.paid_interest += (pay_amount + fine_amt)
         tx.principal = 0.0
         tx.status = 'คืนแล้ว'
     else:
         pay_amount = float(request.form.get('pay_amount', 0))
-        total_reduction = pay_amount + discount_amt
+        # นำยอดชำระจริงบวกเพิ่มด้วยค่าปรับ
+        effective_pay = pay_amount + fine_amt
+        total_reduction = effective_pay + discount_amt
         
-        if pay_amount >= total_acc_interest:
+        if effective_pay >= total_acc_interest:
             interest_paid = total_acc_interest
             remainder = total_reduction - total_acc_interest
             tx.paid_interest += interest_paid
@@ -527,7 +543,7 @@ def update_payment(tx_id):
                 if tx.principal < 0:
                     tx.principal = 0.0
         else:
-            tx.paid_interest += pay_amount
+            tx.paid_interest += effective_pay
             if discount_amt > 0:
                 tx.principal -= discount_amt
                 if tx.principal < 0:
@@ -538,6 +554,9 @@ def update_payment(tx_id):
             tx.principal = 0.0
         else:
             tx.status = 'ตัดยอดบางส่วน'
+
+    if new_status:
+        tx.status = new_status
 
     tx.last_payment_date = today
     db.session.commit()
