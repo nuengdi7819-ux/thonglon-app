@@ -524,13 +524,11 @@ def update_payment(tx_id):
     if payment_type == 'full':
         pay_amount = total_acc_interest
         discount_amt = 0.0
-        # ถือว่าค่าปรับถูกชำระรวมเข้ามาด้วย
         tx.paid_interest += (pay_amount + fine_amt)
         tx.principal = 0.0
         tx.status = 'คืนแล้ว'
     else:
         pay_amount = float(request.form.get('pay_amount', 0))
-        # นำยอดชำระจริงบวกเพิ่มด้วยค่าปรับ
         effective_pay = pay_amount + fine_amt
         total_reduction = effective_pay + discount_amt
         
@@ -560,7 +558,7 @@ def update_payment(tx_id):
 
     tx.last_payment_date = today
     db.session.commit()
-    return redirect(url_for('export_data'))
+    return redirect(url_for('index'))
 
 @app.route('/delete_tx/<int:tx_id>')
 def delete_tx(tx_id):
