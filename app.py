@@ -253,15 +253,21 @@ def index():
         tx.days_passed = f"{days} วัน"
         acc = (tx.daily_interest * days) - tx.paid_interest
         tx.accumulated_interest = acc if acc > 0 else 0.0
-        tx.total_paid = (tx.original_principal - tx.principal) + tx.paid_interest
+        
+        if tx.type == 'ยอดค้างเก่า':
+            tx.total_paid = (tx.original_principal - tx.principal)
+        else:
+            tx.total_paid = tx.paid_interest
 
     all_txs = Transaction.query.all()
     total_new_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     total_debt_principal = sum(tx.principal for tx in all_txs if tx.type == 'ยอดค้างเก่า')
-    total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
+    
+    # คำนวณเงินต้นคงค้างเฉพาะรายการที่ยังไม่ถูกปิดบัญชี (สถานะไม่ใช่ 'คืนแล้ว' และ principal > 0)
+    total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า' and tx.status != 'คืนแล้ว' and tx.principal > 0)
     
     total_profit = sum(
-        ((tx.original_principal - tx.principal) + tx.paid_interest) if tx.type == 'ยอดค้างเก่า' else tx.paid_interest 
+        ((tx.original_principal - tx.principal)) if tx.type == 'ยอดค้างเก่า' else tx.paid_interest 
         for tx in all_txs
     )
 
@@ -516,7 +522,11 @@ def export_data():
     
     txs = Transaction.query.all()
     for t in txs:
-        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        if t.type == 'ยอดค้างเก่า':
+            total_paid = (t.original_principal - t.principal)
+        else:
+            total_paid = t.paid_interest
+            
         cw.writerow([t.id, t.type, t.customer_name, t.phone, t.sales_name, t.start_date, t.original_principal, t.principal, t.daily_interest, t.paid_interest, t.status, t.installment_amount, total_paid])
     
     output = io.BytesIO()
@@ -586,10 +596,13 @@ def update_payment(tx_id):
     if total_acc_interest < 0:
         total_acc_interest = 0.0
 
+    tx.last_payment_date = today
+
     if payment_type == 'full':
-        pay_amount = total_acc_interest
-        discount_amt = 0.0
-        tx.paid_interest += (pay_amount + fine_amt)
+        full_collection = total_acc_interest + fine_amt
+        if full_collection > 0:
+            tx.paid_interest += full_collection
+            
         tx.principal = 0.0
         tx.status = 'คืนแล้ว'
     else:
@@ -621,10 +634,8 @@ def update_payment(tx_id):
     if new_status:
         tx.status = new_status
 
-    tx.last_payment_date = today
     db.session.commit()
     
-    # รีเฟรชกลับมาที่หน้า index ทันทีเพื่อให้เว็บอัปเดตยอดคงเหลือเป็น 0 ทันที
     return redirect(url_for('index'))
 
 @app.route('/delete_tx/<int:tx_id>')
@@ -650,7 +661,7 @@ def members():
             days = 1
         acc = (t.daily_interest * days) - t.paid_interest
         acc_interest = acc if acc > 0 else 0.0
-        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
         
         rows += f"""
         <tr>
@@ -718,7 +729,7 @@ def sales_members():
                 days = 1
             acc = (t.daily_interest * days) - t.paid_interest
             acc_interest = acc if acc > 0 else 0.0
-            total_paid = (t.original_principal - t.principal) + t.paid_interest
+            total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
             
             sub_rows += f"""
             <tr>
@@ -780,7 +791,7 @@ def customer_summary():
         acc = (t.daily_interest * days) - t.paid_interest
         acc_interest = acc if acc > 0 else 0.0
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
-        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
         
         customer_rows += f"""
         <tr>
@@ -845,7 +856,7 @@ def customer_emergency():
         acc = (t.daily_interest * days) - t.paid_interest
         acc_interest = acc if acc > 0 else 0.0
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
-        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
         
         customer_rows += f"""
         <tr>
@@ -908,7 +919,7 @@ def customer_gold():
         acc = (t.daily_interest * days) - t.paid_interest
         acc_interest = acc if acc > 0 else 0.0
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
-        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
         
         customer_rows += f"""
         <tr>
@@ -1034,7 +1045,7 @@ def monthly_summary():
         if tx.start_date:
             ym = tx.start_date.strftime('%Y-%m')
             monthly_data[ym]['count'] += 1
-            collected_amount = (tx.original_principal - tx.principal) + tx.paid_interest
+            collected_amount = (tx.original_principal - tx.principal) if tx.type == 'ยอดค้างเก่า' else tx.paid_interest
 
             if tx.type == 'ยอดค้างเก่า':
                 monthly_data[ym]['debt_start'] += tx.original_principal
