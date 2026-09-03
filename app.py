@@ -188,7 +188,6 @@ BASE_LAYOUT = """
         }
     }
 
-    // ฟังก์ชันเคลียร์ Modal และ Backdrop ที่ค้างทันทีเมื่อกดบันทึก
     function closeAllModals() {
         document.querySelectorAll('.modal').forEach(modal => {
             let bsModal = bootstrap.Modal.getInstance(modal);
@@ -607,12 +606,19 @@ def members():
         return redirect(url_for('login'))
     
     txs = Transaction.query.all()
+    today = datetime.now().date()
     rows = ""
     for t in txs:
+        days = (today - t.start_date).days
+        if days < 1:
+            days = 1
+        acc = (t.daily_interest * days) - t.paid_interest
+        acc_interest = acc if acc > 0 else 0.0
         total_paid = (t.original_principal - t.principal) + t.paid_interest
+        
         rows += f"""
         <tr>
-            <td>{t.customer_name}</td>
+            <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{t.customer_name}</td>
             <td>{t.phone or '-'}</td>
             <td><span class="badge bg-danger">{t.sales_name}</span></td>
             <td><span class="badge bg-secondary">{t.type}</span></td>
@@ -620,7 +626,9 @@ def members():
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
-            <td>{t.status}</td>
+            <td>{t.daily_interest:,.2f}</td>
+            <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
+            <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
         """
     
@@ -630,9 +638,21 @@ def members():
         <div class="table-responsive">
             <table class="table table-striped text-nowrap align-middle">
                 <thead class="table-dark">
-                    <tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>เซลล์ผู้ดูแล</th><th>ประเภท</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr>
+                    <tr>
+                        <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
+                        <th>เบอร์โทร</th>
+                        <th>เซลล์ผู้ดูแล</th>
+                        <th>ประเภท</th>
+                        <th>วันที่กู้</th>
+                        <th>เงินลงทุน</th>
+                        <th>ต้นคงค้าง</th>
+                        <th>ยอดที่ชำระมาแล้ว</th>
+                        <th>ดอกเบี้ย/วัน</th>
+                        <th>ดอกเบี้ยสะสม</th>
+                        <th>สถานะ</th>
+                    </tr>
                 </thead>
-                <tbody>{rows if rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
+                <tbody>{rows if rows else "<tr><td colspan='11' class='text-center text-muted'>ยังไม่มีข้อมูลสมาชิก</td></tr>"}</tbody>
             </table>
         </div>
     </div>
@@ -646,6 +666,7 @@ def sales_members():
         return redirect(url_for('login'))
     
     all_txs = Transaction.query.all()
+    today = datetime.now().date()
     sales_data = {}
     for tx in all_txs:
         if tx.sales_name not in sales_data:
@@ -656,17 +677,25 @@ def sales_members():
     for sales, txs in sales_data.items():
         sub_rows = ""
         for t in txs:
+            days = (today - t.start_date).days
+            if days < 1:
+                days = 1
+            acc = (t.daily_interest * days) - t.paid_interest
+            acc_interest = acc if acc > 0 else 0.0
             total_paid = (t.original_principal - t.principal) + t.paid_interest
+            
             sub_rows += f"""
             <tr>
-                <td>{t.customer_name}</td>
+                <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{t.customer_name}</td>
                 <td>{t.phone or '-'}</td>
                 <td><span class="badge bg-secondary">{t.type}</span></td>
                 <td>{t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'}</td>
                 <td>{t.original_principal:,.2f}</td>
                 <td>{t.principal:,.2f}</td>
                 <td><strong>{total_paid:,.2f}</strong></td>
-                <td>{t.status}</td>
+                <td>{t.daily_interest:,.2f}</td>
+                <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
+                <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
             </tr>
             """
         sales_content += f"""
@@ -675,7 +704,20 @@ def sales_members():
             <div class="card-body">
                 <div class="table-responsive">
                     <table class="table table-striped text-nowrap align-middle">
-                        <thead><tr><th>ชื่อลูกค้า</th><th>เบอร์โทร</th><th>ประเภท</th><th>วันที่กู้</th><th>เงินลงทุน</th><th>ต้นคงค้าง</th><th>ยอดที่ชำระมาแล้ว</th><th>สถานะ</th></tr></thead>
+                        <thead>
+                            <tr>
+                                <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
+                                <th>เบอร์โทร</th>
+                                <th>ประเภท</th>
+                                <th>วันที่กู้</th>
+                                <th>เงินลงทุน</th>
+                                <th>ต้นคงค้าง</th>
+                                <th>ยอดที่ชำระมาแล้ว</th>
+                                <th>ดอกเบี้ย/วัน</th>
+                                <th>ดอกเบี้ยสะสม</th>
+                                <th>สถานะ</th>
+                            </tr>
+                        </thead>
                         <tbody>{sub_rows}</tbody>
                     </table>
                 </div>
@@ -693,13 +735,20 @@ def customer_summary():
         return redirect(url_for('login'))
     
     txs = Transaction.query.all()
+    today = datetime.now().date()
     customer_rows = ""
     for t in txs:
+        days = (today - t.start_date).days
+        if days < 1:
+            days = 1
+        acc = (t.daily_interest * days) - t.paid_interest
+        acc_interest = acc if acc > 0 else 0.0
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         total_paid = (t.original_principal - t.principal) + t.paid_interest
+        
         customer_rows += f"""
         <tr>
-            <td>{t.customer_name}</td>
+            <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{t.customer_name}</td>
             <td>{t.phone or '-'}</td>
             <td><span class="badge bg-danger">{t.sales_name}</span></td>
             <td>{t.type}</td>
@@ -707,6 +756,8 @@ def customer_summary():
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
+            <td>{t.daily_interest:,.2f}</td>
+            <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
@@ -719,7 +770,7 @@ def customer_summary():
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
                     <tr>
-                        <th>ชื่อลูกค้า</th>
+                        <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
                         <th>เซลล์ผู้ดูแล</th>
                         <th>ประเภท</th>
@@ -727,12 +778,14 @@ def customer_summary():
                         <th>เงินลงทุน</th>
                         <th>ต้นคงค้าง</th>
                         <th>ยอดที่ชำระมาแล้ว</th>
+                        <th>ดอกเบี้ย/วัน</th>
+                        <th>ดอกเบี้ยสะสม</th>
                         <th>กำไรสะสม</th>
                         <th>สถานะ</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {customer_rows if customer_rows else "<tr><td colspan='10' class='text-center text-muted'>ยังไม่มีข้อมูลสรุปลูกค้า</td></tr>"}
+                    {customer_rows if customer_rows else "<tr><td colspan='12' class='text-center text-muted'>ยังไม่มีข้อมูลสรุปลูกค้า</td></tr>"}
                 </tbody>
             </table>
         </div>
@@ -747,19 +800,28 @@ def customer_emergency():
         return redirect(url_for('login'))
     
     txs = Transaction.query.filter_by(type='เงินฉุกเฉิน').all()
+    today = datetime.now().date()
     customer_rows = ""
     for t in txs:
+        days = (today - t.start_date).days
+        if days < 1:
+            days = 1
+        acc = (t.daily_interest * days) - t.paid_interest
+        acc_interest = acc if acc > 0 else 0.0
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         total_paid = (t.original_principal - t.principal) + t.paid_interest
+        
         customer_rows += f"""
         <tr>
-            <td>{t.customer_name}</td>
+            <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{t.customer_name}</td>
             <td>{t.phone or '-'}</td>
             <td><span class="badge bg-danger">{t.sales_name}</span></td>
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
+            <td>{t.daily_interest:,.2f}</td>
+            <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
@@ -772,19 +834,21 @@ def customer_emergency():
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
                     <tr>
-                        <th>ชื่อลูกค้า</th>
+                        <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
                         <th>เซลล์ผู้ดูแล</th>
                         <th>วันที่กู้</th>
                         <th>เงินลงทุน</th>
                         <th>ต้นคงค้าง</th>
                         <th>ยอดที่ชำระมาแล้ว</th>
+                        <th>ดอกเบี้ย/วัน</th>
+                        <th>ดอกเบี้ยสะสม</th>
                         <th>กำไรสะสม</th>
                         <th>สถานะ</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {customer_rows if customer_rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลเงินฉุกเฉิน</td></tr>"}
+                    {customer_rows if customer_rows else "<tr><td colspan='11' class='text-center text-muted'>ยังไม่มีข้อมูลเงินฉุกเฉิน</td></tr>"}
                 </tbody>
             </table>
         </div>
@@ -799,19 +863,28 @@ def customer_gold():
         return redirect(url_for('login'))
     
     txs = Transaction.query.filter_by(type='ผ่อนทอง').all()
+    today = datetime.now().date()
     customer_rows = ""
     for t in txs:
+        days = (today - t.start_date).days
+        if days < 1:
+            days = 1
+        acc = (t.daily_interest * days) - t.paid_interest
+        acc_interest = acc if acc > 0 else 0.0
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         total_paid = (t.original_principal - t.principal) + t.paid_interest
+        
         customer_rows += f"""
         <tr>
-            <td>{t.customer_name}</td>
+            <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{t.customer_name}</td>
             <td>{t.phone or '-'}</td>
             <td><span class="badge bg-danger">{t.sales_name}</span></td>
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
+            <td>{t.daily_interest:,.2f}</td>
+            <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
@@ -824,19 +897,21 @@ def customer_gold():
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
                     <tr>
-                        <th>ชื่อลูกค้า</th>
+                        <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
                         <th>เซลล์ผู้ดูแล</th>
                         <th>วันที่กู้</th>
                         <th>เงินลงทุน</th>
                         <th>ต้นคงค้าง</th>
                         <th>ยอดที่ชำระมาแล้ว</th>
+                        <th>ดอกเบี้ย/วัน</th>
+                        <th>ดอกเบี้ยสะสม</th>
                         <th>กำไรสะสม</th>
                         <th>สถานะ</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {customer_rows if customer_rows else "<tr><td colspan='9' class='text-center text-muted'>ยังไม่มีข้อมูลผ่อนทอง</td></tr>"}
+                    {customer_rows if customer_rows else "<tr><td colspan='11' class='text-center text-muted'>ยังไม่มีข้อมูลผ่อนทอง</td></tr>"}
                 </tbody>
             </table>
         </div>
@@ -867,13 +942,14 @@ def customer_debt():
 
         customer_rows += f"""
         <tr>
-            <td>{t.customer_name}</td>
+            <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{t.customer_name}</td>
             <td>{t.phone or '-'}</td>
             <td><span class="badge bg-danger">{t.sales_name}</span></td>
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
+            <td>{t.daily_interest:,.2f}</td>
             <td class="text-danger fw-bold">{installment_info}</td>
             <td class="text-success fw-bold">{total_paid:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
@@ -887,20 +963,21 @@ def customer_debt():
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
                     <tr>
-                        <th>ชื่อลูกค้า</th>
+                        <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
                         <th>เซลล์ผู้ดูแล</th>
                         <th>วันที่เริ่ม</th>
                         <th>ยอดค้างตั้งต้น</th>
                         <th>ยอดค้างคงเหลือ</th>
                         <th>เก็บเงินได้แล้ว</th>
+                        <th>ดอกเบี้ย/วัน</th>
                         <th>งวดคงเหลือ / ทั้งหมด</th>
                         <th>ยอดเก็บสะสมเข้ากำไร</th>
                         <th>สถานะ</th>
                     </tr>
                 </thead>
                 <tbody>
-                    {customer_rows if customer_rows else "<tr><td colspan='10' class='text-center text-muted'>ยังไม่มีข้อมูลยอดค้างเก่า</td></tr>"}
+                    {customer_rows if customer_rows else "<tr><td colspan='11' class='text-center text-muted'>ยังไม่มีข้อมูลยอดค้างเก่า</td></tr>"}
                 </tbody>
             </table>
         </div>
