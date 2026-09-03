@@ -238,7 +238,6 @@ def index():
     total_debt_principal = sum(tx.principal for tx in all_txs if tx.type == 'ยอดค้างเก่า')
     total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     
-    # กำไรสะสมทั้งหมด (ยอดค้างเก่าที่เก็บได้แล้วนับเป็นกำไร + ดอกเบี้ยสะสมของเงินใหม่)
     total_profit = sum(
         ((tx.original_principal - tx.principal) + tx.paid_interest) if tx.type == 'ยอดค้างเก่า' else tx.paid_interest 
         for tx in all_txs
@@ -563,7 +562,8 @@ def update_payment(tx_id):
 
     tx.last_payment_date = today
     db.session.commit()
-    return redirect(url_for('index'))
+    
+    return redirect(url_for('export_data'))
 
 @app.route('/delete_tx/<int:tx_id>')
 def delete_tx(tx_id):
@@ -899,11 +899,11 @@ def monthly_summary():
             if tx.type == 'ยอดค้างเก่า':
                 monthly_data[ym]['debt_start'] += tx.original_principal
                 monthly_data[ym]['debt_paid'] += collected_amount
-                monthly_data[ym]['profit'] += collected_amount  # ยอดค้างเก่าตีเข้ากำไรทั้งหมด
+                monthly_data[ym]['profit'] += collected_amount
             else:
                 monthly_data[ym]['new_investment'] += tx.original_principal
                 monthly_data[ym]['new_paid'] += collected_amount
-                monthly_data[ym]['profit'] += tx.paid_interest  # เงินใหม่นับกำไรจากดอกเบี้ย
+                monthly_data[ym]['profit'] += tx.paid_interest
 
     sorted_months = sorted(monthly_data.keys(), reverse=True)
     
