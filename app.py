@@ -9,10 +9,13 @@ import math
 
 app = Flask(__name__)
 
-basedir = os.path.abspath(os.path.dirname(__file__))
-db_path = os.path.join(basedir, 'thonglon.db')
+# เปลี่ยนมาใช้ Database บน Cloud (Supabase / PostgreSQL) เพื่อความปลอดภัย 100%
+# แทนที่ 'postgresql://...' ด้านล่างด้วย Connection URI ที่คัดลอกมาจาก Supabase ของคุณ
+DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres:[YOUR-PASSWORD]@db.xxxxxxx.supabase.co:5432/postgres')
+if DATABASE_URL.startswith("postgres://"):
+    DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
-app.config['SQLALCHEMY_DATABASE_URI'] = f'sqlite:///{db_path}'
+app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'your_secret_key_thonglon_2026'
 db = SQLAlchemy(app)
@@ -23,6 +26,7 @@ VALID_USERS = {
 }
 
 class Transaction(db.Model):
+    __tablename__ = 'transactions'
     id = db.Column(db.Integer, primary_key=True)
     type = db.Column(db.String(50), nullable=False)
     customer_name = db.Column(db.String(100), nullable=False)
@@ -236,7 +240,7 @@ def index():
             )
             db.session.add(new_tx)
             db.session.commit()
-            db.session.remove() # บังคับเขียนลงไฟล์ฐานข้อมูลถาวรทันที
+            db.session.remove()
             
             return redirect(url_for('index'))
         except Exception as e:
@@ -654,7 +658,7 @@ def update_payment(tx_id):
                 tx.status = new_status
 
     db.session.commit()
-    db.session.remove() # บังคับเขียนลงไฟล์ฐานข้อมูลถาวรทันที
+    db.session.remove()
     return redirect(url_for('index'))
 
 @app.route('/delete_tx/<int:tx_id>')
