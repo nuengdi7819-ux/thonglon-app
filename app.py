@@ -63,6 +63,22 @@ BASE_LAYOUT = """
         .btn-warning { background-color: #d4af37; border-color: #d4af37; color: #2c0b0e; font-weight: 600; }
         .btn-warning:hover { background-color: #b38f27; border-color: #b38f27; color: #fff; }
 
+        /* ปรับแต่ง Scrollbar ของตารางให้ใหญ่และเห็นชัดเจน */
+        .table-responsive::-webkit-scrollbar {
+            height: 12px;
+        }
+        .table-responsive::-webkit-scrollbar-track {
+            background: #f1f1f1;
+            border-radius: 6px;
+        }
+        .table-responsive::-webkit-scrollbar-thumb {
+            background: #d4af37;
+            border-radius: 6px;
+        }
+        .table-responsive::-webkit-scrollbar-thumb:hover {
+            background: #b38f27;
+        }
+
         @media (max-width: 992px) {
             .sidebar { transform: translateX(-100%); }
             .sidebar.show { transform: translateX(0); }
@@ -262,7 +278,7 @@ def index():
         
         rows += f"""
         <tr>
-            <td>{tx.customer_name}</td>
+            <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{tx.customer_name}</td>
             <td>{tx.phone or '-'}</td>
             <td><span class="badge bg-secondary">{tx.type}</span></td>
             <td>{start_date_str}</td>
@@ -274,8 +290,8 @@ def index():
             <td>{display_days}</td>
             <td>{display_acc_interest}</td>
             <td><span class="badge {badge_color}">{tx.status}</span></td>
-            <td>
-                <div class="d-flex flex-column gap-2" style="width: 90px;">
+            <td style="position: sticky; right: 0; background-color: #fff; z-index: 2; text-align: center;">
+                <div class="d-flex flex-column gap-2" style="width: 90px; margin: 0 auto;">
                     <button type="button" class="btn btn-sm btn-warning w-100" data-bs-toggle="modal" data-bs-target="#payModal{tx.id}">จัดการยอด</button>
                     <a href="/delete_tx/{tx.id}" class="btn btn-sm btn-danger w-100" onclick="return confirm('ยืนยันการลบ?')">ลบ</a>
                 </div>
@@ -415,7 +431,7 @@ def index():
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
                     <tr>
-                        <th>ชื่อลูกค้า</th>
+                        <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
                         <th>เบอร์โทร</th>
                         <th>ประเภท</th>
                         <th>วันที่กู้</th>
@@ -427,7 +443,7 @@ def index():
                         <th>เวลาผ่านไป</th>
                         <th>ดอกเบี้ยสะสม</th>
                         <th>สถานะ</th>
-                        <th>จัดการ</th>
+                        <th style="position: sticky; right: 0; background-color: #212529; z-index: 3; text-align: center;">จัดการ</th>
                     </tr>
                 </thead>
                 <tbody>
