@@ -421,7 +421,6 @@ def index():
         </div>
     </div>
 
-    <!-- ช่องทางรวม Modal ทั้งหมดแยกออกมานอกตาราง เพื่อให้มือถือแสดงผลถูกต้อง -->
     {modals_html}
     """
 
@@ -436,11 +435,13 @@ def export_data():
     
     si = io.StringIO()
     cw = csv.writer(si)
-    cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status', 'InstallmentAmount'])
+    # เพิ่มคอลัมน์ TotalPaid (ยอดที่ชำระมาแล้ว) เข้าไปในไฟล์ CSV ด้วย
+    cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status', 'InstallmentAmount', 'TotalPaid'])
     
     txs = Transaction.query.all()
     for t in txs:
-        cw.writerow([t.id, t.type, t.customer_name, t.phone, t.sales_name, t.start_date, t.original_principal, t.principal, t.daily_interest, t.paid_interest, t.status, t.installment_amount])
+        total_paid = (t.original_principal - t.principal) + t.paid_interest
+        cw.writerow([t.id, t.type, t.customer_name, t.phone, t.sales_name, t.start_date, t.original_principal, t.principal, t.daily_interest, t.paid_interest, t.status, t.installment_amount, total_paid])
     
     output = io.BytesIO()
     output.write(si.getvalue().encode('utf-8-sig'))
