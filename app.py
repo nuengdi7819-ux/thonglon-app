@@ -209,7 +209,8 @@ def index():
             db.session.add(new_tx)
             db.session.commit()
             
-            return redirect(url_for('export_data'))
+            # บันทึกเสร็จรีเฟรชหน้าหลักทันที ไม่ค้างคา
+            return redirect(url_for('index'))
         except Exception as e:
             print("Error adding transaction:", e)
         return redirect(url_for('index'))
