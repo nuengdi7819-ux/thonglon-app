@@ -63,7 +63,6 @@ BASE_LAYOUT = """
         .btn-warning { background-color: #d4af37; border-color: #d4af37; color: #2c0b0e; font-weight: 600; }
         .btn-warning:hover { background-color: #b38f27; border-color: #b38f27; color: #fff; }
 
-        /* ปรับแต่ง Scrollbar ของตารางให้ใหญ่และเห็นชัดเจน */
         .table-responsive::-webkit-scrollbar {
             height: 12px;
         }
@@ -187,6 +186,18 @@ BASE_LAYOUT = """
         } else {
             instDiv.style.display = 'none';
         }
+    }
+
+    // ฟังก์ชันเคลียร์ Modal และ Backdrop ที่ค้างทันทีเมื่อกดบันทึก
+    function closeAllModals() {
+        document.querySelectorAll('.modal').forEach(modal => {
+            let bsModal = bootstrap.Modal.getInstance(modal);
+            if (bsModal) { bsModal.hide(); }
+        });
+        document.querySelectorAll('.modal-backdrop').forEach(el => el.remove());
+        document.body.classList.remove('modal-open');
+        document.body.style.overflow = '';
+        document.body.style.paddingRight = '';
     }
     </script>
 </body>
@@ -342,7 +353,7 @@ def index():
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
-                            <button type="submit" class="btn btn-warning">บันทึกการชำระ</button>
+                            <button type="submit" class="btn btn-warning" onclick="closeAllModals()">บันทึกการชำระ</button>
                         </div>
                     </form>
                 </div>
@@ -414,7 +425,7 @@ def index():
                 <input type="number" step="any" name="daily_interest" class="form-control" value="0" required>
             </div>
             <div class="col-md-4 d-flex align-items-end">
-                <button type="submit" class="btn btn-success w-100 fw-bold">บันทึกข้อมูล</button>
+                <button type="submit" class="btn btn-success w-100 fw-bold" onclick="closeAllModals()">บันทึกข้อมูล</button>
             </div>
         </form>
     </div>
