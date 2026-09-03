@@ -63,27 +63,24 @@ BASE_LAYOUT = """
         .btn-warning { background-color: #d4af37; border-color: #d4af37; color: #2c0b0e; font-weight: 600; }
         .btn-warning:hover { background-color: #b38f27; border-color: #b38f27; color: #fff; }
 
-        .table-responsive::-webkit-scrollbar {
-            height: 12px;
-        }
-        .table-responsive::-webkit-scrollbar-track {
-            background: #f1f1f1;
-            border-radius: 6px;
-        }
-        .table-responsive::-webkit-scrollbar-thumb {
-            background: #d4af37;
-            border-radius: 6px;
-        }
-        .table-responsive::-webkit-scrollbar-thumb:hover {
-            background: #b38f27;
-        }
+        .table-responsive::-webkit-scrollbar { height: 12px; }
+        .table-responsive::-webkit-scrollbar-track { background: #f1f1f1; border-radius: 6px; }
+        .table-responsive::-webkit-scrollbar-thumb { background: #d4af37; border-radius: 6px; }
+        .table-responsive::-webkit-scrollbar-thumb:hover { background: #b38f27; }
 
         @media (max-width: 992px) {
             .sidebar { transform: translateX(-100%); }
             .sidebar.show { transform: translateX(0); }
-            .main-content { margin-left: 0; padding: 15px; }
+            .main-content { margin-left: 0; padding: 12px; }
             .mobile-header { display: flex; justify-content: space-between; align-items: center; }
             .sidebar-backdrop.show { display: block; }
+            /* ซ่อนตารางปกติบนมือถือ แล้วแสดงผลเป็นการ์ดแทนเพื่อให้ดูข้อมูลง่าย */
+            .desktop-table-view { display: none; }
+            .mobile-card-view { display: block; }
+        }
+        @media (min-width: 993px) {
+            .desktop-table-view { display: block; }
+            .mobile-card-view { display: none; }
         }
     </style>
 </head>
@@ -270,6 +267,7 @@ def index():
     )
 
     rows = ""
+    cards = ""
     modals_html = ""
     for tx in transactions:
         badge_color = 'bg-success'
@@ -286,6 +284,7 @@ def index():
         display_acc_interest = f"{tx.accumulated_interest:,.2f}"
         display_total_paid = f"{tx.total_paid:,.2f}"
         
+        # Desktop Table Row
         rows += f"""
         <tr>
             <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{tx.customer_name}</td>
@@ -307,6 +306,38 @@ def index():
                 </div>
             </td>
         </tr>
+        """
+
+        # Mobile Card View
+        cards += f"""
+        <div class="card mb-3 shadow-sm border-warning">
+            <div class="card-body p-3">
+                <div class="d-flex justify-content-between align-items-start mb-2">
+                    <div>
+                        <h6 class="fw-bold text-dark mb-1">👤 {tx.customer_name}</h6>
+                        <span class="badge bg-secondary">{tx.type}</span>
+                        <span class="badge {badge_color}">{tx.status}</span>
+                    </div>
+                    <div class="text-end">
+                        <small class="text-muted">โทร: {tx.phone or '-'}</small>
+                    </div>
+                </div>
+                <hr class="my-2">
+                <div class="row g-1 small mb-3">
+                    <div class="col-6">📅 วันที่เริ่ม: {start_date_str}</div>
+                    <div class="col-6">⏱️ เวลา: {display_days}</div>
+                    <div class="col-6">💰 เงินลงทุน: <b>{tx.original_principal:,.2f}</b></div>
+                    <div class="col-6 text-danger">💼 ต้นคงค้าง: <b>{tx.principal:,.2f}</b></div>
+                    <div class="col-6 text-primary">💵 ชำระแล้ว: <b>{display_total_paid}</b></div>
+                    <div class="col-6">📈 ดอก/วัน: {display_daily_interest}</div>
+                    <div class="col-12 text-danger fw-bold mt-1">🔥 ดอกเบี้ยสะสม: {display_acc_interest} บาท</div>
+                </div>
+                <div class="d-flex gap-2">
+                    <button type="button" class="btn btn-warning btn-sm w-100 fw-bold" data-bs-toggle="modal" data-bs-target="#payModal{tx.id}">⚙️ จัดการยอด</button>
+                    <a href="/delete_tx/{tx.id}" class="btn btn-outline-danger btn-sm" onclick="return confirm('ยืนยันการลบ?')">ลบ</a>
+                </div>
+            </div>
+        </div>
         """
 
         modals_html += f"""
@@ -437,7 +468,9 @@ def index():
                 <button type="submit" class="btn btn-sm btn-outline-danger">ค้นหา</button>
             </form>
         </div>
-        <div class="table-responsive">
+        
+        <!-- มุมมองสำหรับคอมพิวเตอร์ (ตารางปกติ) -->
+        <div class="table-responsive desktop-table-view">
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
                     <tr>
@@ -460,6 +493,11 @@ def index():
                     {rows if rows else "<tr><td colspan='13' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
                 </tbody>
             </table>
+        </div>
+
+        <!-- มุมมองสำหรับมือถือ (เป็นการ์ดรายบุคคล อ่านง่าย ไม่ต้องเลื่อนขวา) -->
+        <div class="mobile-card-view">
+            {cards if cards else "<p class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</p>"}
         </div>
     </div>
 
@@ -636,7 +674,7 @@ def members():
     <div class="card p-4 shadow-sm border-warning">
         <h4 class="mb-3 fs-5 text-danger fw-bold">👥 รายชื่อสมาชิกทั้งหมด</h4>
         <div class="table-responsive">
-            <table class="table table-striped text-nowrap align-middle">
+            <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
                     <tr>
                         <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
@@ -703,7 +741,7 @@ def sales_members():
             <div class="card-header bg-danger text-white"><h5 class="mb-0 fs-6">🔱 เซลล์ผู้ดูแล: {sales}</h5></div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped text-nowrap align-middle">
+                    <table class="table table-striped align-middle text-nowrap">
                         <thead>
                             <tr>
                                 <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
@@ -1105,7 +1143,7 @@ def login():
             <h3 class="text-center mb-1 text-danger fw-bold">🔱 ทองล้น</h3>
             <p class="text-center text-muted small mb-4">ระบบบริหารจัดการการเงิน</p>
             {% if error %}
-                <div class="alert alert-danger py-2 text-center">{{ error }}</div>
+                <div class="alert alert-danger py-2 text-center">{error}</div>
             {% endif %}
             <form method="POST">
                 <div class="mb-3"><label class="form-label">ชื่อผู้ใช้งาน:</label><input type="text" name="username" class="form-control" required></div>
