@@ -33,6 +33,7 @@ class Transaction(db.Model):
     original_principal = db.Column(db.Float, nullable=False, default=0.0)
     principal = db.Column(db.Float, nullable=False)                      
     daily_interest = db.Column(db.Float, nullable=False)
+    initial_daily_interest = db.Column(db.Float, nullable=False, default=0.0)
     paid_interest = db.Column(db.Float, default=0.0)     
     status = db.Column(db.String(20), default='ปกติ')
     installment_amount = db.Column(db.Float, default=0.0)
@@ -165,11 +166,15 @@ BASE_LAYOUT = """
     function togglePayInput(id) {
         let selectElem = document.getElementById('payType' + id);
         let divElem = document.getElementById('amountDiv' + id);
+        let statusElem = document.getElementById('newStatus' + id);
+        
         if (selectElem && divElem) {
             if (selectElem.value === 'full') {
                 divElem.style.display = 'none';
+                if (statusElem) { statusElem.value = 'คืนแล้ว'; }
             } else {
                 divElem.style.display = 'block';
+                if (statusElem) { statusElem.value = 'ตัดยอดบางส่วน'; }
             }
         }
     }
@@ -226,10 +231,12 @@ def index():
                 original_principal=p_val,
                 principal=p_val,
                 daily_interest=d_interest,
+                initial_daily_interest=d_interest,
                 installment_amount=inst_amt
             )
             db.session.add(new_tx)
             db.session.commit()
+            db.session.flush() # บังคับซิงค์ฐานข้อมูลทันที
             
             return redirect(url_for('index'))
         except Exception as e:
@@ -251,6 +258,11 @@ def index():
         if days < 1:
             days = 1
         tx.days_passed = f"{days} วัน"
+        
+        if tx.original_principal > 0 and tx.initial_daily_interest > 0:
+            current_daily_interest = tx.initial_daily_interest * (tx.principal / tx.original_principal)
+            tx.daily_interest = current_daily_interest
+        
         acc = (tx.daily_interest * days) - tx.paid_interest
         tx.accumulated_interest = acc if acc > 0 else 0.0
         
@@ -262,8 +274,6 @@ def index():
     all_txs = Transaction.query.all()
     total_new_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     total_debt_principal = sum(tx.principal for tx in all_txs if tx.type == 'ยอดค้างเก่า')
-    
-    # หักลบเงินต้นคงค้างเฉพาะรายการที่ยังไม่ถูกปิดบัญชี
     total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า' and tx.status != 'คืนแล้ว' and tx.principal > 0)
     
     total_profit = sum(
@@ -379,7 +389,7 @@ def index():
                             </div>
                             <div class="mb-3">
                                 <label class="form-label text-success fw-bold">ปรับเปลี่ยนสถานะรายการ</label>
-                                <select name="new_status" class="form-select border-success">
+                                <select name="new_status" class="form-select border-success" id="newStatus{tx.id}">
                                     <option value="ปกติ" {"selected" if tx.status == "ปกติ" else ""}>ปกติ</option>
                                     <option value="ตัดยอดบางส่วน" {"selected" if tx.status == "ตัดยอดบางส่วน" else ""}>ตัดยอดบางส่วน</option>
                                     <option value="คืนแล้ว" {"selected" if tx.status == "คืนแล้ว" else ""}>คืนแล้ว</option>
@@ -566,12 +576,14 @@ def import_data():
                     original_principal=float(row.get('OriginalPrincipal', 0)),
                     principal=float(row.get('Principal', 0)),
                     daily_interest=float(row.get('DailyInterest', 0)),
+                    initial_daily_interest=float(row.get('DailyInterest', 0)),
                     paid_interest=float(row.get('PaidInterest', 0)),
                     status=row.get('Status', 'ปกติ'),
                     installment_amount=float(row.get('InstallmentAmount', 0))
                 )
                 db.session.add(new_t)
             db.session.commit()
+            db.session.flush()
         except Exception as e:
             print("Import error:", e)
     return redirect(url_for('index'))
@@ -592,7 +604,8 @@ def update_payment(tx_id):
     if days < 1:
         days = 1
         
-    total_acc_interest = (tx.daily_interest * days) - tx.paid_interest
+    current_effective_daily = tx.initial_daily_interest * (tx.principal / tx.original_principal) if tx.original_principal > 0 else tx.daily_interest
+    total_acc_interest = (current_effective_daily * days) - tx.paid_interest
     if total_acc_interest < 0:
         total_acc_interest = 0.0
 
@@ -628,14 +641,14 @@ def update_payment(tx_id):
         if tx.principal <= 0:
             tx.status = 'คืนแล้ว'
             tx.principal = 0.0
-        else:
+        elif tx.principal < tx.original_principal:
             tx.status = 'ตัดยอดบางส่วน'
-
-    if new_status:
-        tx.status = new_status
+        else:
+            if new_status:
+                tx.status = new_status
 
     db.session.commit()
-    
+    db.session.flush() # บังคับเขียนข้อมูลลงไฟล์ฐานข้อมูลทันที
     return redirect(url_for('index'))
 
 @app.route('/delete_tx/<int:tx_id>')
@@ -645,6 +658,7 @@ def delete_tx(tx_id):
     tx = Transaction.query.get_or_404(tx_id)
     db.session.delete(tx)
     db.session.commit()
+    db.session.flush()
     return redirect(url_for('index'))
 
 @app.route('/members')
@@ -659,7 +673,9 @@ def members():
         days = (today - t.start_date).days
         if days < 1:
             days = 1
-        acc = (t.daily_interest * days) - t.paid_interest
+        
+        eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
+        acc = (eff_daily * days) - t.paid_interest
         acc_interest = acc if acc > 0 else 0.0
         total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
         
@@ -673,7 +689,7 @@ def members():
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
-            <td>{t.daily_interest:,.2f}</td>
+            <td>{eff_daily:,.2f}</td>
             <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
@@ -727,7 +743,8 @@ def sales_members():
             days = (today - t.start_date).days
             if days < 1:
                 days = 1
-            acc = (t.daily_interest * days) - t.paid_interest
+            eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
+            acc = (eff_daily * days) - t.paid_interest
             acc_interest = acc if acc > 0 else 0.0
             total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
             
@@ -740,7 +757,7 @@ def sales_members():
                 <td>{t.original_principal:,.2f}</td>
                 <td>{t.principal:,.2f}</td>
                 <td><strong>{total_paid:,.2f}</strong></td>
-                <td>{t.daily_interest:,.2f}</td>
+                <td>{eff_daily:,.2f}</td>
                 <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
                 <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
             </tr>
@@ -788,7 +805,8 @@ def customer_summary():
         days = (today - t.start_date).days
         if days < 1:
             days = 1
-        acc = (t.daily_interest * days) - t.paid_interest
+        eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
+        acc = (eff_daily * days) - t.paid_interest
         acc_interest = acc if acc > 0 else 0.0
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
@@ -803,7 +821,7 @@ def customer_summary():
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
-            <td>{t.daily_interest:,.2f}</td>
+            <td>{eff_daily:,.2f}</td>
             <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
@@ -853,7 +871,8 @@ def customer_emergency():
         days = (today - t.start_date).days
         if days < 1:
             days = 1
-        acc = (t.daily_interest * days) - t.paid_interest
+        eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
+        acc = (eff_daily * days) - t.paid_interest
         acc_interest = acc if acc > 0 else 0.0
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
@@ -867,7 +886,7 @@ def customer_emergency():
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
-            <td>{t.daily_interest:,.2f}</td>
+            <td>{eff_daily:,.2f}</td>
             <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
@@ -916,7 +935,8 @@ def customer_gold():
         days = (today - t.start_date).days
         if days < 1:
             days = 1
-        acc = (t.daily_interest * days) - t.paid_interest
+        eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
+        acc = (eff_daily * days) - t.paid_interest
         acc_interest = acc if acc > 0 else 0.0
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
@@ -930,7 +950,7 @@ def customer_gold():
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
-            <td>{t.daily_interest:,.2f}</td>
+            <td>{eff_daily:,.2f}</td>
             <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
