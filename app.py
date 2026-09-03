@@ -209,7 +209,6 @@ def index():
             db.session.add(new_tx)
             db.session.commit()
             
-            # Auto-Backup: ดาวน์โหลดไฟล์สำรองข้อมูลรวมยอดทั้งหมดลงเครื่องอัตโนมัติทันที
             return redirect(url_for('export_data'))
         except Exception as e:
             print("Error adding transaction:", e)
@@ -241,6 +240,7 @@ def index():
     total_profit = sum(tx.paid_interest for tx in all_txs)
 
     rows = ""
+    modals_html = ""
     for tx in transactions:
         badge_color = 'bg-success'
         if tx.status == 'ตัดยอดบางส่วน':
@@ -256,26 +256,6 @@ def index():
         display_acc_interest = f"{tx.accumulated_interest:,.2f}"
         display_total_paid = f"{tx.total_paid:,.2f}"
         
-        modal_body_content = f"""
-                        <p class="text-muted mb-1">เงินต้นคงเหลือ: <b>{tx.principal:,.2f} บาท</b></p>
-                        <p class="text-muted mb-3">ดอกเบี้ยสะสม: <b class="text-danger">{tx.accumulated_interest:,.2f} บาท</b></p>
-                        <div class="mb-3">
-                            <label class="form-label">เลือกประเภทการชำระ</label>
-                            <select name="payment_type" class="form-select" id="payType{tx.id}" onchange="togglePayInput({tx.id})" required>
-                                <option value="partial">จ่ายบางส่วน (ตัดดอกเบี้ย / ตัดต้น)</option>
-                                <option value="full">คืนครบทั้งหมด (ปิดบัญชี)</option>
-                            </select>
-                        </div>
-                        <div class="mb-3" id="amountDiv{tx.id}">
-                            <label class="form-label">จำนวนเงินที่รับชำระจริง (บาท)</label>
-                            <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
-                        </div>
-                        <div class="mb-3">
-                            <label class="form-label text-danger">ส่วนลด (ถ้ามี / บาท)</label>
-                            <input type="number" step="any" name="discount_amount" class="form-control" value="0" placeholder="กรอกส่วนลด">
-                        </div>
-        """
-
         rows += f"""
         <tr>
             <td>{tx.customer_name}</td>
@@ -297,10 +277,12 @@ def index():
                 </div>
             </td>
         </tr>
+        """
 
+        modals_html += f"""
         <!-- Modal จัดการยอดชำระ -->
         <div class="modal fade" id="payModal{tx.id}" tabindex="-1">
-            <div class="modal-dialog">
+            <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content">
                     <form action="/update_payment/{tx.id}" method="POST">
                         <div class="modal-header bg-danger text-white">
@@ -308,7 +290,23 @@ def index():
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            {modal_body_content}
+                            <p class="text-muted mb-1">เงินต้นคงเหลือ: <b>{tx.principal:,.2f} บาท</b></p>
+                            <p class="text-muted mb-3">ดอกเบี้ยสะสม: <b class="text-danger">{tx.accumulated_interest:,.2f} บาท</b></p>
+                            <div class="mb-3">
+                                <label class="form-label">เลือกประเภทการชำระ</label>
+                                <select name="payment_type" class="form-select" id="payType{tx.id}" onchange="togglePayInput({tx.id})" required>
+                                    <option value="partial">จ่ายบางส่วน (ตัดดอกเบี้ย / ตัดต้น)</option>
+                                    <option value="full">คืนครบทั้งหมด (ปิดบัญชี)</option>
+                                </select>
+                            </div>
+                            <div class="mb-3" id="amountDiv{tx.id}">
+                                <label class="form-label">จำนวนเงินที่รับชำระจริง (บาท)</label>
+                                <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-danger">ส่วนลด (ถ้ามี / บาท)</label>
+                                <input type="number" step="any" name="discount_amount" class="form-control" value="0" placeholder="กรอกส่วนลด">
+                            </div>
                         </div>
                         <div class="modal-footer">
                             <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
@@ -422,6 +420,9 @@ def index():
             </table>
         </div>
     </div>
+
+    <!-- ช่องทางรวม Modal ทั้งหมดแยกออกมานอกตาราง เพื่อให้มือถือแสดงผลถูกต้อง -->
+    {modals_html}
     """
 
     html = BASE_LAYOUT.replace('{% block header %}Dashboard{% endblock %}', '🔱 Dashboard บริหารจัดการระบบ')
@@ -539,7 +540,7 @@ def update_payment(tx_id):
 
     tx.last_payment_date = today
     db.session.commit()
-    return redirect(url_for('index'))
+    return redirect(url_for('export_data'))
 
 @app.route('/delete_tx/<int:tx_id>')
 def delete_tx(tx_id):
