@@ -263,7 +263,7 @@ def index():
     total_new_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     total_debt_principal = sum(tx.principal for tx in all_txs if tx.type == 'ยอดค้างเก่า')
     
-    # คำนวณเงินต้นคงค้างเฉพาะรายการที่ยังไม่ถูกปิดบัญชี (สถานะไม่ใช่ 'คืนแล้ว' และ principal > 0)
+    # หักลบเงินต้นคงค้างเฉพาะรายการที่ยังไม่ถูกปิดบัญชี
     total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า' and tx.status != 'คืนแล้ว' and tx.principal > 0)
     
     total_profit = sum(
