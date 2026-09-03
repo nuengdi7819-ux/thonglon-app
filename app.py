@@ -74,7 +74,6 @@ BASE_LAYOUT = """
             .main-content { margin-left: 0; padding: 12px; }
             .mobile-header { display: flex; justify-content: space-between; align-items: center; }
             .sidebar-backdrop.show { display: block; }
-            /* ซ่อนตารางปกติบนมือถือ แล้วแสดงผลเป็นการ์ดแทนเพื่อให้ดูข้อมูลง่าย */
             .desktop-table-view { display: none; }
             .mobile-card-view { display: block; }
         }
@@ -232,7 +231,7 @@ def index():
             db.session.add(new_tx)
             db.session.commit()
             
-            return redirect(url_for('export_data'))
+            return redirect(url_for('index'))
         except Exception as e:
             print("Error adding transaction:", e)
         return redirect(url_for('index'))
@@ -469,7 +468,6 @@ def index():
             </form>
         </div>
         
-        <!-- มุมมองสำหรับคอมพิวเตอร์ (ตารางปกติ) -->
         <div class="table-responsive desktop-table-view">
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
@@ -495,7 +493,6 @@ def index():
             </table>
         </div>
 
-        <!-- มุมมองสำหรับมือถือ (เป็นการ์ดรายบุคคล อ่านง่าย ไม่ต้องเลื่อนขวา) -->
         <div class="mobile-card-view">
             {cards if cards else "<p class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</p>"}
         </div>
@@ -627,7 +624,8 @@ def update_payment(tx_id):
     tx.last_payment_date = today
     db.session.commit()
     
-    return redirect(url_for('export_data'))
+    # รีเฟรชกลับมาที่หน้า index ทันทีเพื่อให้เว็บอัปเดตยอดคงเหลือเป็น 0 ทันที
+    return redirect(url_for('index'))
 
 @app.route('/delete_tx/<int:tx_id>')
 def delete_tx(tx_id):
@@ -674,7 +672,7 @@ def members():
     <div class="card p-4 shadow-sm border-warning">
         <h4 class="mb-3 fs-5 text-danger fw-bold">👥 รายชื่อสมาชิกทั้งหมด</h4>
         <div class="table-responsive">
-            <table class="table table-striped align-middle text-nowrap">
+            <table class="table table-striped text-nowrap align-middle">
                 <thead class="table-dark">
                     <tr>
                         <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
@@ -741,7 +739,7 @@ def sales_members():
             <div class="card-header bg-danger text-white"><h5 class="mb-0 fs-6">🔱 เซลล์ผู้ดูแล: {sales}</h5></div>
             <div class="card-body">
                 <div class="table-responsive">
-                    <table class="table table-striped align-middle text-nowrap">
+                    <table class="table table-striped text-nowrap align-middle">
                         <thead>
                             <tr>
                                 <th style="position: sticky; left: 0; background-color: #212529; z-index: 3;">ชื่อลูกค้า</th>
@@ -1143,7 +1141,7 @@ def login():
             <h3 class="text-center mb-1 text-danger fw-bold">🔱 ทองล้น</h3>
             <p class="text-center text-muted small mb-4">ระบบบริหารจัดการการเงิน</p>
             {% if error %}
-                <div class="alert alert-danger py-2 text-center">{error}</div>
+                <div class="alert alert-danger py-2 text-center">{{ error }}</div>
             {% endif %}
             <form method="POST">
                 <div class="mb-3"><label class="form-label">ชื่อผู้ใช้งาน:</label><input type="text" name="username" class="form-control" required></div>
