@@ -236,7 +236,7 @@ def index():
             )
             db.session.add(new_tx)
             db.session.commit()
-            db.session.flush()
+            db.session.remove() # บังคับเขียนลงไฟล์ฐานข้อมูลถาวรทันที
             
             return redirect(url_for('index'))
         except Exception as e:
@@ -254,7 +254,6 @@ def index():
 
     today = datetime.now().date()
     for tx in transactions:
-        # นับวันรวมวันเริ่มต้นด้วย (กู้วันที่ 1, วันนี้วันที่ 4 -> 4 - 1 + 1 = 4 วัน)
         days = (today - tx.start_date).days + 1
         if days < 1:
             days = 1
@@ -590,7 +589,7 @@ def import_data():
                 )
                 db.session.add(new_t)
             db.session.commit()
-            db.session.flush()
+            db.session.remove()
         except Exception as e:
             print("Import error:", e)
     return redirect(url_for('index'))
@@ -655,7 +654,7 @@ def update_payment(tx_id):
                 tx.status = new_status
 
     db.session.commit()
-    db.session.flush()
+    db.session.remove() # บังคับเขียนลงไฟล์ฐานข้อมูลถาวรทันที
     return redirect(url_for('index'))
 
 @app.route('/delete_tx/<int:tx_id>')
@@ -665,7 +664,7 @@ def delete_tx(tx_id):
     tx = Transaction.query.get_or_404(tx_id)
     db.session.delete(tx)
     db.session.commit()
-    db.session.flush()
+    db.session.remove()
     return redirect(url_for('index'))
 
 @app.route('/members')
