@@ -130,7 +130,7 @@ BASE_LAYOUT = """
                     </div>
                     <div class="modal-footer">
                         <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
-                        <button type="submit" class="btn btn-info fw-bold" onclick="return confirm('ยืนยันการนำเข้าข้อมูล? (ข้อมูลเดิมที่มีอยู่จะไม่หาย แต่จะเพิ่มรายการจากไฟล์เข้าไป)')">อัปโหลดและกู้คืน</button>
+                        <button type="submit" class="btn btn-info fw-bold" onclick="return confirm('ยืนยันการนำเข้าข้อมูล?')">อัปโหลดและกู้คืน</button>
                     </div>
                 </form>
             </div>
@@ -208,6 +208,9 @@ def index():
             )
             db.session.add(new_tx)
             db.session.commit()
+            
+            # Auto-Backup: ดาวน์โหลดไฟล์สำรองข้อมูลรวมยอดทั้งหมดลงเครื่องอัตโนมัติทันที
+            return redirect(url_for('export_data'))
         except Exception as e:
             print("Error adding transaction:", e)
         return redirect(url_for('index'))
