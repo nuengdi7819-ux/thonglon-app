@@ -236,7 +236,7 @@ def index():
             )
             db.session.add(new_tx)
             db.session.commit()
-            db.session.flush() # บังคับซิงค์ฐานข้อมูลทันที
+            db.session.flush()
             
             return redirect(url_for('index'))
         except Exception as e:
@@ -270,6 +270,13 @@ def index():
             tx.total_paid = (tx.original_principal - tx.principal)
         else:
             tx.total_paid = tx.paid_interest
+
+        # บังคับสถานะแสดงผลให้ถูกต้อง 100% ตามยอดเงินต้นคงเหลือจริง
+        if tx.principal <= 0:
+            tx.status = 'คืนแล้ว'
+        elif tx.principal < tx.original_principal:
+            if tx.status == 'ปกติ':
+                tx.status = 'ตัดยอดบางส่วน'
 
     all_txs = Transaction.query.all()
     total_new_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
@@ -648,7 +655,7 @@ def update_payment(tx_id):
                 tx.status = new_status
 
     db.session.commit()
-    db.session.flush() # บังคับเขียนข้อมูลลงไฟล์ฐานข้อมูลทันที
+    db.session.flush()
     return redirect(url_for('index'))
 
 @app.route('/delete_tx/<int:tx_id>')
@@ -674,6 +681,11 @@ def members():
         if days < 1:
             days = 1
         
+        if t.principal <= 0:
+            t.status = 'คืนแล้ว'
+        elif t.principal < t.original_principal and t.status == 'ปกติ':
+            t.status = 'ตัดยอดบางส่วน'
+
         eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
         acc = (eff_daily * days) - t.paid_interest
         acc_interest = acc if acc > 0 else 0.0
@@ -732,6 +744,11 @@ def sales_members():
     today = datetime.now().date()
     sales_data = {}
     for tx in all_txs:
+        if tx.principal <= 0:
+            tx.status = 'คืนแล้ว'
+        elif tx.principal < tx.original_principal and tx.status == 'ปกติ':
+            tx.status = 'ตัดยอดบางส่วน'
+
         if tx.sales_name not in sales_data:
             sales_data[tx.sales_name] = []
         sales_data[tx.sales_name].append(tx)
@@ -802,6 +819,11 @@ def customer_summary():
     today = datetime.now().date()
     customer_rows = ""
     for t in txs:
+        if t.principal <= 0:
+            t.status = 'คืนแล้ว'
+        elif t.principal < t.original_principal and t.status == 'ปกติ':
+            t.status = 'ตัดยอดบางส่วน'
+
         days = (today - t.start_date).days
         if days < 1:
             days = 1
@@ -868,6 +890,11 @@ def customer_emergency():
     today = datetime.now().date()
     customer_rows = ""
     for t in txs:
+        if t.principal <= 0:
+            t.status = 'คืนแล้ว'
+        elif t.principal < t.original_principal and t.status == 'ปกติ':
+            t.status = 'ตัดยอดบางส่วน'
+
         days = (today - t.start_date).days
         if days < 1:
             days = 1
@@ -932,6 +959,11 @@ def customer_gold():
     today = datetime.now().date()
     customer_rows = ""
     for t in txs:
+        if t.principal <= 0:
+            t.status = 'คืนแล้ว'
+        elif t.principal < t.original_principal and t.status == 'ปกติ':
+            t.status = 'ตัดยอดบางส่วน'
+
         days = (today - t.start_date).days
         if days < 1:
             days = 1
@@ -995,6 +1027,11 @@ def customer_debt():
     txs = Transaction.query.filter_by(type='ยอดค้างเก่า').all()
     customer_rows = ""
     for t in txs:
+        if t.principal <= 0:
+            t.status = 'คืนแล้ว'
+        elif t.principal < t.original_principal and t.status == 'ปกติ':
+            t.status = 'ตัดยอดบางส่วน'
+
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         total_paid = t.original_principal - t.principal
         
