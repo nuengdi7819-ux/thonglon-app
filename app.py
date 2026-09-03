@@ -209,7 +209,6 @@ def index():
             db.session.add(new_tx)
             db.session.commit()
             
-            # เพิ่มรายชื่อใหม่เสร็จ ดาวน์โหลดไฟล์สำรองข้อมูลอัตโนมัติทันที
             return redirect(url_for('export_data'))
         except Exception as e:
             print("Error adding transaction:", e)
@@ -238,7 +237,13 @@ def index():
     total_new_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     total_debt_principal = sum(tx.principal for tx in all_txs if tx.type == 'ยอดค้างเก่า')
     total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
-    total_profit = sum(tx.paid_interest for tx in all_txs)
+    
+    # กำไรสะสมทั้งหมด (สำหรับยอดค้างเก่า ให้นับยอดที่เก็บได้แล้วทั้งหมดเป็นกำไรทันที)
+    total_profit = sum(
+        ((tx.original_principal - tx.principal) + tx.paid_interest) if tx.type == 'ยอดค้างเก่า' else tx.paid_interest 
+        for tx in all_txs
+    )
+    total_collected_overall = sum(((tx.original_principal - tx.principal) + tx.paid_interest) for tx in all_txs)
 
     rows = ""
     modals_html = ""
@@ -273,7 +278,6 @@ def index():
             <td><span class="badge {badge_color}">{tx.status}</span></td>
             <td>
                 <div class="d-flex flex-column gap-2" style="width: 90px;">
-                    <button type="button" class="btn btn-sm btn-info text-dark fw-bold w-100" data-bs-toggle="modal" data-bs-target="#editModal{tx.id}">แก้ไข</button>
                     <button type="button" class="btn btn-sm btn-warning w-100" data-bs-toggle="modal" data-bs-target="#payModal{tx.id}">จัดการยอด</button>
                     <a href="/delete_tx/{tx.id}" class="btn btn-sm btn-danger w-100" onclick="return confirm('ยืนยันการลบ?')">ลบ</a>
                 </div>
@@ -282,34 +286,6 @@ def index():
         """
 
         modals_html += f"""
-        <!-- Modal แก้ไขข้อมูลลูกค้า -->
-        <div class="modal fade" id="editModal{tx.id}" tabindex="-1">
-            <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
-                    <form action="/update_customer/{tx.id}" method="POST">
-                        <div class="modal-header bg-info text-dark">
-                            <h5 class="modal-title fw-bold">แก้ไขข้อมูล: {tx.customer_name}</h5>
-                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
-                        </div>
-                        <div class="modal-body">
-                            <div class="mb-3">
-                                <label class="form-label">ชื่อลูกค้า</label>
-                                <input type="text" name="customer_name" class="form-control" value="{tx.customer_name}" required>
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label">เบอร์โทร</label>
-                                <input type="text" name="phone" class="form-control" value="{tx.phone or ''}">
-                            </div>
-                        </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
-                            <button type="submit" class="btn btn-info fw-bold">บันทึกการแก้ไข</button>
-                        </div>
-                    </form>
-                </div>
-            </div>
-        </div>
-
         <!-- Modal จัดการยอดชำระ -->
         <div class="modal fade" id="payModal{tx.id}" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
@@ -362,25 +338,31 @@ def index():
 
     content = f"""
     <div class="row mb-4">
-        <div class="col-md-3 mb-3">
+        <div class="col-md mb-3">
             <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #004d99, #3399ff);">
                 <h5>🔱 เงินลงทุนใหม่</h5>
                 <h3>{total_new_investment:,.2f} บาท</h3>
             </div>
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md mb-3">
             <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #d97706, #f59e0b);">
                 <h5>📂 ยอดค้างเก่าคงเหลือ</h5>
                 <h3>{total_debt_principal:,.2f} บาท</h3>
             </div>
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md mb-3">
             <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #b30000, #ff4d4d);">
                 <h5>💼 เงินต้นคงค้าง</h5>
                 <h3>{total_new_principal:,.2f} บาท</h3>
             </div>
         </div>
-        <div class="col-md-3 mb-3">
+        <div class="col-md mb-3">
+            <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #581c87, #9333ea);">
+                <h5>💸 ยอดที่ชำระมาแล้ว</h5>
+                <h3>{total_collected_overall:,.2f} บาท</h3>
+            </div>
+        </div>
+        <div class="col-md mb-3">
             <div class="card p-3 shadow-sm text-white" style="background: linear-gradient(135deg, #006622, #00b33c);">
                 <h5>💰 กำไรสะสมทั้งหมด</h5>
                 <h3>{total_profit:,.2f} บาท</h3>
@@ -529,16 +511,6 @@ def import_data():
             db.session.commit()
         except Exception as e:
             print("Import error:", e)
-    return redirect(url_for('index'))
-
-@app.route('/update_customer/<int:tx_id>', methods=['POST'])
-def update_customer(tx_id):
-    if 'admin' not in session:
-        return redirect(url_for('login'))
-    tx = Transaction.query.get_or_404(tx_id)
-    tx.customer_name = request.form.get('customer_name', tx.customer_name)
-    tx.phone = request.form.get('phone', tx.phone)
-    db.session.commit()
     return redirect(url_for('index'))
 
 @app.route('/update_payment/<int:tx_id>', methods=['POST'])
@@ -883,7 +855,7 @@ def customer_debt():
             <td>{t.principal:,.2f}</td>
             <td><strong>{total_paid:,.2f}</strong></td>
             <td class="text-danger fw-bold">{installment_info}</td>
-            <td>{t.paid_interest:,.2f}</td>
+            <td class="text-success fw-bold">{total_paid:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
         """
@@ -934,11 +906,11 @@ def monthly_summary():
             if tx.type == 'ยอดค้างเก่า':
                 monthly_data[ym]['debt_start'] += tx.original_principal
                 monthly_data[ym]['debt_paid'] += collected_amount
+                monthly_data[ym]['profit'] += collected_amount  # ยอดค้างเก่าตีเข้ากำไรทั้งหมด
             else:
                 monthly_data[ym]['new_investment'] += tx.original_principal
                 monthly_data[ym]['new_paid'] += collected_amount
-
-            monthly_data[ym]['profit'] += tx.paid_interest
+                monthly_data[ym]['profit'] += tx.paid_interest  # เงินใหม่นับกำไรจากดอกเบี้ย
 
     sorted_months = sorted(monthly_data.keys(), reverse=True)
     
