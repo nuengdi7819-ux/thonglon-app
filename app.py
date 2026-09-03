@@ -209,8 +209,8 @@ def index():
             db.session.add(new_tx)
             db.session.commit()
             
-            # บันทึกเสร็จรีเฟรชหน้าหลักทันที ไม่ค้างคา
-            return redirect(url_for('index'))
+            # เพิ่มรายชื่อใหม่เสร็จ ดาวน์โหลดไฟล์สำรองข้อมูลอัตโนมัติทันที
+            return redirect(url_for('export_data'))
         except Exception as e:
             print("Error adding transaction:", e)
         return redirect(url_for('index'))
@@ -273,6 +273,7 @@ def index():
             <td><span class="badge {badge_color}">{tx.status}</span></td>
             <td>
                 <div class="d-flex flex-column gap-2" style="width: 90px;">
+                    <button type="button" class="btn btn-sm btn-info text-dark fw-bold w-100" data-bs-toggle="modal" data-bs-target="#editModal{tx.id}">แก้ไข</button>
                     <button type="button" class="btn btn-sm btn-warning w-100" data-bs-toggle="modal" data-bs-target="#payModal{tx.id}">จัดการยอด</button>
                     <a href="/delete_tx/{tx.id}" class="btn btn-sm btn-danger w-100" onclick="return confirm('ยืนยันการลบ?')">ลบ</a>
                 </div>
@@ -281,6 +282,34 @@ def index():
         """
 
         modals_html += f"""
+        <!-- Modal แก้ไขข้อมูลลูกค้า -->
+        <div class="modal fade" id="editModal{tx.id}" tabindex="-1">
+            <div class="modal-dialog modal-dialog-centered">
+                <div class="modal-content">
+                    <form action="/update_customer/{tx.id}" method="POST">
+                        <div class="modal-header bg-info text-dark">
+                            <h5 class="modal-title fw-bold">แก้ไขข้อมูล: {tx.customer_name}</h5>
+                            <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+                        </div>
+                        <div class="modal-body">
+                            <div class="mb-3">
+                                <label class="form-label">ชื่อลูกค้า</label>
+                                <input type="text" name="customer_name" class="form-control" value="{tx.customer_name}" required>
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label">เบอร์โทร</label>
+                                <input type="text" name="phone" class="form-control" value="{tx.phone or ''}">
+                            </div>
+                        </div>
+                        <div class="modal-footer">
+                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
+                            <button type="submit" class="btn btn-info fw-bold">บันทึกการแก้ไข</button>
+                        </div>
+                    </form>
+                </div>
+            </div>
+        </div>
+
         <!-- Modal จัดการยอดชำระ -->
         <div class="modal fade" id="payModal{tx.id}" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
@@ -500,6 +529,16 @@ def import_data():
             db.session.commit()
         except Exception as e:
             print("Import error:", e)
+    return redirect(url_for('index'))
+
+@app.route('/update_customer/<int:tx_id>', methods=['POST'])
+def update_customer(tx_id):
+    if 'admin' not in session:
+        return redirect(url_for('login'))
+    tx = Transaction.query.get_or_404(tx_id)
+    tx.customer_name = request.form.get('customer_name', tx.customer_name)
+    tx.phone = request.form.get('phone', tx.phone)
+    db.session.commit()
     return redirect(url_for('index'))
 
 @app.route('/update_payment/<int:tx_id>', methods=['POST'])
