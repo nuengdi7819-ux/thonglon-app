@@ -254,7 +254,8 @@ def index():
 
     today = datetime.now().date()
     for tx in transactions:
-        days = (today - tx.start_date).days
+        # นับวันรวมวันเริ่มต้นด้วย (กู้วันที่ 1, วันนี้วันที่ 4 -> 4 - 1 + 1 = 4 วัน)
+        days = (today - tx.start_date).days + 1
         if days < 1:
             days = 1
         tx.days_passed = f"{days} วัน"
@@ -271,7 +272,6 @@ def index():
         else:
             tx.total_paid = tx.paid_interest
 
-        # บังคับสถานะแสดงผลให้ถูกต้อง 100% ตามยอดเงินต้นคงเหลือจริง
         if tx.principal <= 0:
             tx.status = 'คืนแล้ว'
         elif tx.principal < tx.original_principal:
@@ -607,7 +607,7 @@ def update_payment(tx_id):
     fine_amt = float(request.form.get('fine_amount', 0))
     new_status = request.form.get('new_status')
     
-    days = (today - tx.start_date).days
+    days = (today - tx.start_date).days + 1
     if days < 1:
         days = 1
         
@@ -677,7 +677,7 @@ def members():
     today = datetime.now().date()
     rows = ""
     for t in txs:
-        days = (today - t.start_date).days
+        days = (today - t.start_date).days + 1
         if days < 1:
             days = 1
         
@@ -757,7 +757,7 @@ def sales_members():
     for sales, txs in sales_data.items():
         sub_rows = ""
         for t in txs:
-            days = (today - t.start_date).days
+            days = (today - t.start_date).days + 1
             if days < 1:
                 days = 1
             eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
@@ -824,7 +824,7 @@ def customer_summary():
         elif t.principal < t.original_principal and t.status == 'ปกติ':
             t.status = 'ตัดยอดบางส่วน'
 
-        days = (today - t.start_date).days
+        days = (today - t.start_date).days + 1
         if days < 1:
             days = 1
         eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
@@ -895,7 +895,7 @@ def customer_emergency():
         elif t.principal < t.original_principal and t.status == 'ปกติ':
             t.status = 'ตัดยอดบางส่วน'
 
-        days = (today - t.start_date).days
+        days = (today - t.start_date).days + 1
         if days < 1:
             days = 1
         eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
@@ -964,7 +964,7 @@ def customer_gold():
         elif t.principal < t.original_principal and t.status == 'ปกติ':
             t.status = 'ตัดยอดบางส่วน'
 
-        days = (today - t.start_date).days
+        days = (today - t.start_date).days + 1
         if days < 1:
             days = 1
         eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
