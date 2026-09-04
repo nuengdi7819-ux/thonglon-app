@@ -72,6 +72,18 @@ BASE_LAYOUT = """
         .table-responsive::-webkit-scrollbar-thumb { background: #d4af37; border-radius: 6px; }
         .table-responsive::-webkit-scrollbar-thumb:hover { background: #b38f27; }
 
+        /* จัดการ Modal ให้ไม่ล้นจอและเลื่อนภายในได้ */
+        @media (max-width: 768px) {
+            .modal-dialog {
+                margin: 10px;
+                max-width: calc(100% - 20px);
+            }
+            .modal-body {
+                max-height: 70vh;
+                overflow-y: auto;
+            }
+        }
+
         @media (max-width: 992px) {
             .sidebar { transform: translateX(-100%); }
             .sidebar.show { transform: translateX(0); }
@@ -192,7 +204,6 @@ BASE_LAYOUT = """
         }
     }
 
-    // ฟังก์ชันคำนวณดอกเบี้ยสดทันทีเมื่อเปลี่ยนวันที่ปิดยอดใน Modal
     function updateInterestOnDateChange(id, startDateStr, dailyInterest, paidInterest) {
         let dateInput = document.getElementById('closedDate' + id);
         let interestDisplay = document.getElementById('accInterestDisplay' + id);
@@ -203,16 +214,13 @@ BASE_LAYOUT = """
         let endDate = selectedDateVal ? new Date(selectedDateVal) : new Date();
         let startDate = new Date(startDateStr);
 
-        // คำนวณจำนวนวัน (end - start + 1)
         let diffTime = endDate - startDate;
         let diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
         if (diffDays < 1) diffDays = 1;
 
-        // คำนวณดอกเบี้ยสะสม
         let totalAcc = (dailyInterest * diffDays) - paidInterest;
         if (totalAcc < 0) totalAcc = 0.0;
 
-        // แสดงผลตัวเลขแบบมีคอมม่า 2 ตำแหน่ง
         interestDisplay.innerText = totalAcc.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " บาท";
     }
 
@@ -301,9 +309,9 @@ def index():
         transactions = Transaction.query.filter(
             (Transaction.customer_name.contains(search_query)) | 
             (Transaction.phone.contains(search_query))
-        ).all()
+        ).order_by(Transaction.id.desc()).all()
     else:
-        transactions = Transaction.query.all()
+        transactions = Transaction.query.order_by(Transaction.id.desc()).all()
 
     for tx in transactions:
         calculate_tx_values(tx)
@@ -398,58 +406,51 @@ def index():
         </div>
         """
 
-        # Modal จัดการยอดชำระแบบจัดลำดับใหม่ให้สบายตาและอัปเดตดอกเบี้ยสดทันที
         modals_html += f"""
         <div class="modal fade" id="payModal{tx.id}" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
                 <div class="modal-content border-warning">
                     <form action="/update_payment/{tx.id}" method="POST">
-                        <div class="modal-header bg-danger text-white">
-                            <h5 class="modal-title">จัดการยอด: {tx.customer_name}</h5>
+                        <div class="modal-header bg-danger text-white py-2">
+                            <h5 class="modal-title fs-6">จัดการยอด: {tx.customer_name}</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
-                        <div class="modal-body">
-                            <!-- Summary Box -->
-                            <div class="p-2 mb-3 bg-light rounded border d-flex justify-content-between align-items-center">
-                                <div><small class="text-muted d-block">เงินต้นคงเหลือ</small><b>{tx.principal:,.2f} บาท</b></div>
-                                <div class="text-end"><small class="text-muted d-block">ดอกเบี้ยสะสม</small><b class="text-danger" id="accInterestDisplay{tx.id}">{tx.accumulated_interest:,.2f} บาท</b></div>
+                        <div class="modal-body py-2">
+                            <div class="p-2 mb-2 bg-light rounded border d-flex justify-content-between align-items-center">
+                                <div><small class="text-muted d-block" style="font-size: 0.75rem;">เงินต้นคงเหลือ</small><b>{tx.principal:,.2f} บาท</b></div>
+                                <div class="text-end"><small class="text-muted d-block" style="font-size: 0.75rem;">ดอกเบี้ยสะสม</small><b class="text-danger" id="accInterestDisplay{tx.id}">{tx.accumulated_interest:,.2f} บาท</b></div>
                             </div>
 
-                            <!-- วันที่ปิดยอด / วันที่คืนยอด (ย้ายขึ้นมาด้านบนเพื่อให้เลือกง่ายและคำนวณสด) -->
-                            <div class="mb-3 p-3 bg-warning bg-opacity-10 rounded border border-warning">
-                                <label class="form-label text-dark fw-bold mb-1">📅 วันที่ปิดยอด / วันที่คืนยอด (ย้อนหลังหรือปิดบัญชี)</label>
-                                <input type="date" name="closed_date" class="form-control border-warning bg-white" id="closedDate{tx.id}" value="{closed_date_str}" onchange="updateInterestOnDateChange({tx.id}, '{start_date_iso}', {tx.daily_interest}, {tx.paid_interest})">
-                                <small class="text-muted mt-1 d-block">เลือกวันที่เพื่อคำนวณดอกเบี้ยหยุดนิ่งถึงวันนั้นทันที</small>
+                            <div class="mb-2 p-2 bg-warning bg-opacity-10 rounded border border-warning">
+                                <label class="form-label text-dark fw-bold mb-1" style="font-size: 0.85rem;">📅 วันที่ปิดยอด / วันที่คืนยอด</label>
+                                <input type="date" name="closed_date" class="form-control form-control-sm border-warning bg-white" id="closedDate{tx.id}" value="{closed_date_str}" onchange="updateInterestOnDateChange({tx.id}, '{start_date_iso}', {tx.daily_interest}, {tx.paid_interest})">
                             </div>
 
-                            <!-- เลือกประเภทการชำระ และ จำนวนเงิน -->
-                            <div class="mb-3">
-                                <label class="form-label fw-bold">เลือกประเภทการชำระ</label>
-                                <select name="payment_type" class="form-select" id="payType{tx.id}" onchange="togglePayInput({tx.id})" required>
+                            <div class="mb-2">
+                                <label class="form-label fw-bold mb-1" style="font-size: 0.85rem;">เลือกประเภทการชำระ</label>
+                                <select name="payment_type" class="form-select form-select-sm" id="payType{tx.id}" onchange="togglePayInput({tx.id})" required>
                                     <option value="partial">จ่ายบางส่วน (ตัดดอกเบี้ย / ตัดต้น)</option>
                                     <option value="full">คืนครบทั้งหมด (ปิดบัญชี)</option>
                                 </select>
                             </div>
-                            <div class="mb-3" id="amountDiv{tx.id}">
-                                <label class="form-label fw-bold">จำนวนเงินที่รับชำระจริง (บาท)</label>
-                                <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
+                            <div class="mb-2" id="amountDiv{tx.id}">
+                                <label class="form-label fw-bold mb-1" style="font-size: 0.85rem;">จำนวนเงินที่รับชำระจริง (บาท)</label>
+                                <input type="number" step="any" name="pay_amount" class="form-control form-control-sm" placeholder="กรอกจำนวนเงิน">
                             </div>
 
-                            <!-- ส่วนลด และ เบี้ยค่าปรับ (จัดให้อยู่คู่กันซ้ายขวาเพื่อความประหยัดพื้นที่และสบายตา) -->
-                            <div class="row g-2 mb-3">
+                            <div class="row g-2 mb-2">
                                 <div class="col-6">
-                                    <label class="form-label text-danger small fw-bold">ส่วนลด (บาท)</label>
+                                    <label class="form-label text-danger small fw-bold mb-1" style="font-size: 0.75rem;">ส่วนลด (บาท)</label>
                                     <input type="number" step="any" name="discount_amount" class="form-control form-control-sm" value="0" placeholder="0">
                                 </div>
                                 <div class="col-6">
-                                    <label class="form-label text-warning text-dark small fw-bold">เบี้ยค่าปรับ (บาท)</label>
+                                    <label class="form-label text-warning text-dark small fw-bold mb-1" style="font-size: 0.75rem;">เบี้ยค่าปรับ (บาท)</label>
                                     <input type="number" step="any" name="fine_amount" class="form-control form-control-sm" value="0" placeholder="0">
                                 </div>
                             </div>
 
-                            <!-- ปรับเปลี่ยนสถานะรายการ -->
-                            <div class="mb-2">
-                                <label class="form-label text-success fw-bold">สถานะรายการ</label>
+                            <div class="mb-1">
+                                <label class="form-label text-success fw-bold mb-1" style="font-size: 0.85rem;">สถานะรายการ</label>
                                 <select name="new_status" class="form-select form-select-sm border-success" id="newStatus{tx.id}">
                                     <option value="ปกติ" {"selected" if tx.status == "ปกติ" else ""}>ปกติ</option>
                                     <option value="ตัดยอดบางส่วน" {"selected" if tx.status == "ตัดยอดบางส่วน" else ""}>ตัดยอดบางส่วน</option>
@@ -457,7 +458,7 @@ def index():
                                 </select>
                             </div>
                         </div>
-                        <div class="modal-footer bg-light">
+                        <div class="modal-footer bg-light py-2">
                             <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
                             <button type="submit" class="btn btn-warning btn-sm fw-bold px-4" onclick="closeAllModals()">บันทึกการชำระ</button>
                         </div>
@@ -591,7 +592,7 @@ def export_data():
     cw = csv.writer(si)
     cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'ClosedDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status', 'InstallmentAmount', 'TotalPaid'])
     
-    txs = Transaction.query.all()
+    txs = Transaction.query.order_by(Transaction.id.desc()).all()
     for t in txs:
         if t.type == 'ยอดค้างเก่า':
             total_paid = (t.original_principal - t.principal)
@@ -721,7 +722,6 @@ def update_payment(tx_id):
                 tx.principal -= discount_amt
                 if tx.principal < 0:
                     tx.principal = 0.0
-            # ตามเงื่อนไข: หากจ่ายดอกเบี้ยยังไม่หมด ให้คงยอดเงินต้นเดิมไว้ (ไม่ไปลดทอนต้น)
             
         if tx.principal <= 0:
             tx.status = 'คืนแล้ว'
@@ -753,7 +753,7 @@ def members():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.all()
+    txs = Transaction.query.order_by(Transaction.id.desc()).all()
     rows = ""
     for t in txs:
         calculate_tx_values(t)
@@ -808,7 +808,7 @@ def sales_members():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    all_txs = Transaction.query.all()
+    all_txs = Transaction.query.order_by(Transaction.id.desc()).all()
     sales_data = {}
     for tx in all_txs:
         calculate_tx_values(tx)
@@ -871,7 +871,7 @@ def customer_summary():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.all()
+    txs = Transaction.query.order_by(Transaction.id.desc()).all()
     customer_rows = ""
     for t in txs:
         calculate_tx_values(t)
@@ -930,7 +930,7 @@ def customer_emergency():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.filter_by(type='เงินฉุกเฉิน').all()
+    txs = Transaction.query.filter_by(type='เงินฉุกเฉิน').order_by(Transaction.id.desc()).all()
     customer_rows = ""
     for t in txs:
         calculate_tx_values(t)
@@ -987,7 +987,7 @@ def customer_gold():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.filter_by(type='ผ่อนทอง').all()
+    txs = Transaction.query.filter_by(type='ผ่อนทอง').order_by(Transaction.id.desc()).all()
     customer_rows = ""
     for t in txs:
         calculate_tx_values(t)
@@ -1044,7 +1044,7 @@ def customer_debt():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.filter_by(type='ยอดค้างเก่า').all()
+    txs = Transaction.query.filter_by(type='ยอดค้างเก่า').order_by(Transaction.id.desc()).all()
     customer_rows = ""
     for t in txs:
         calculate_tx_values(t)
