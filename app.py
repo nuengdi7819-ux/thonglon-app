@@ -32,7 +32,7 @@ class Transaction(db.Model):
     sales_name = db.Column(db.String(100), nullable=False)
     start_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
     last_payment_date = db.Column(db.Date, nullable=True)
-    closed_date = db.Column(db.Date, nullable=True)  # เพิ่มฟิลด์วันที่ปิดยอด
+    closed_date = db.Column(db.Date, nullable=True)
     original_principal = db.Column(db.Float, nullable=False, default=0.0)
     principal = db.Column(db.Float, nullable=False)                     
     daily_interest = db.Column(db.Float, nullable=False)
@@ -192,6 +192,30 @@ BASE_LAYOUT = """
         }
     }
 
+    // ฟังก์ชันคำนวณดอกเบี้ยสดทันทีเมื่อเปลี่ยนวันที่ปิดยอดใน Modal
+    function updateInterestOnDateChange(id, startDateStr, dailyInterest, paidInterest) {
+        let dateInput = document.getElementById('closedDate' + id);
+        let interestDisplay = document.getElementById('accInterestDisplay' + id);
+        
+        if (!dateInput || !interestDisplay) return;
+
+        let selectedDateVal = dateInput.value;
+        let endDate = selectedDateVal ? new Date(selectedDateVal) : new Date();
+        let startDate = new Date(startDateStr);
+
+        // คำนวณจำนวนวัน (end - start + 1)
+        let diffTime = endDate - startDate;
+        let diffDays = Math.floor(diffTime / (1000 * 60 * 60 * 24)) + 1;
+        if (diffDays < 1) diffDays = 1;
+
+        // คำนวณดอกเบี้ยสะสม
+        let totalAcc = (dailyInterest * diffDays) - paidInterest;
+        if (totalAcc < 0) totalAcc = 0.0;
+
+        // แสดงผลตัวเลขแบบมีคอมม่า 2 ตำแหน่ง
+        interestDisplay.innerText = totalAcc.toLocaleString('en-US', {minimumFractionDigits: 2, maximumFractionDigits: 2}) + " บาท";
+    }
+
     function closeAllModals() {
         document.querySelectorAll('.modal').forEach(modal => {
             let bsModal = bootstrap.Modal.getInstance(modal);
@@ -208,8 +232,6 @@ BASE_LAYOUT = """
 """
 
 def calculate_tx_values(tx):
-    # ถ้ามีวันที่ปิดยอด (closed_date) ให้ใช้วันที่ปิดยอดเป็นวันสิ้นสุดการคำนวณดอกเบี้ย
-    # ถ้ายัังไม่มี ให้ใช้วันปัจจุบัน (datetime.now().date())
     end_date = tx.closed_date if tx.closed_date else datetime.now().date()
     
     days = (end_date - tx.start_date).days + 1
@@ -311,6 +333,7 @@ def index():
             badge_color = 'bg-secondary'
 
         start_date_str = tx.start_date.strftime('%d/%m/%Y') if tx.start_date else '-'
+        start_date_iso = tx.start_date.strftime('%Y-%m-%d') if tx.start_date else datetime.now().strftime('%Y-%m-%d')
         last_pay_str = tx.last_payment_date.strftime('%d/%m/%Y') if tx.last_payment_date else '-'
         closed_date_str = tx.closed_date.strftime('%Y-%m-%d') if tx.closed_date else ''
 
@@ -375,54 +398,68 @@ def index():
         </div>
         """
 
+        # Modal จัดการยอดชำระแบบจัดลำดับใหม่ให้สบายตาและอัปเดตดอกเบี้ยสดทันที
         modals_html += f"""
-        <!-- Modal จัดการยอดชำระ -->
         <div class="modal fade" id="payModal{tx.id}" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
-                <div class="modal-content">
+                <div class="modal-content border-warning">
                     <form action="/update_payment/{tx.id}" method="POST">
                         <div class="modal-header bg-danger text-white">
                             <h5 class="modal-title">จัดการยอด: {tx.customer_name}</h5>
                             <button type="button" class="btn-close btn-close-white" data-bs-dismiss="modal"></button>
                         </div>
                         <div class="modal-body">
-                            <p class="text-muted mb-1">เงินต้นคงเหลือ: <b>{tx.principal:,.2f} บาท</b></p>
-                            <p class="text-muted mb-3">ดอกเบี้ยสะสม: <b class="text-danger">{tx.accumulated_interest:,.2f} บาท</b></p>
+                            <!-- Summary Box -->
+                            <div class="p-2 mb-3 bg-light rounded border d-flex justify-content-between align-items-center">
+                                <div><small class="text-muted d-block">เงินต้นคงเหลือ</small><b>{tx.principal:,.2f} บาท</b></div>
+                                <div class="text-end"><small class="text-muted d-block">ดอกเบี้ยสะสม</small><b class="text-danger" id="accInterestDisplay{tx.id}">{tx.accumulated_interest:,.2f} บาท</b></div>
+                            </div>
+
+                            <!-- วันที่ปิดยอด / วันที่คืนยอด (ย้ายขึ้นมาด้านบนเพื่อให้เลือกง่ายและคำนวณสด) -->
+                            <div class="mb-3 p-3 bg-warning bg-opacity-10 rounded border border-warning">
+                                <label class="form-label text-dark fw-bold mb-1">📅 วันที่ปิดยอด / วันที่คืนยอด (ย้อนหลังหรือปิดบัญชี)</label>
+                                <input type="date" name="closed_date" class="form-control border-warning bg-white" id="closedDate{tx.id}" value="{closed_date_str}" onchange="updateInterestOnDateChange({tx.id}, '{start_date_iso}', {tx.daily_interest}, {tx.paid_interest})">
+                                <small class="text-muted mt-1 d-block">เลือกวันที่เพื่อคำนวณดอกเบี้ยหยุดนิ่งถึงวันนั้นทันที</small>
+                            </div>
+
+                            <!-- เลือกประเภทการชำระ และ จำนวนเงิน -->
                             <div class="mb-3">
-                                <label class="form-label">เลือกประเภทการชำระ</label>
+                                <label class="form-label fw-bold">เลือกประเภทการชำระ</label>
                                 <select name="payment_type" class="form-select" id="payType{tx.id}" onchange="togglePayInput({tx.id})" required>
                                     <option value="partial">จ่ายบางส่วน (ตัดดอกเบี้ย / ตัดต้น)</option>
                                     <option value="full">คืนครบทั้งหมด (ปิดบัญชี)</option>
                                 </select>
                             </div>
                             <div class="mb-3" id="amountDiv{tx.id}">
-                                <label class="form-label">จำนวนเงินที่รับชำระจริง (บาท)</label>
+                                <label class="form-label fw-bold">จำนวนเงินที่รับชำระจริง (บาท)</label>
                                 <input type="number" step="any" name="pay_amount" class="form-control" placeholder="กรอกจำนวนเงิน">
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label text-danger">ส่วนลด (ถ้ามี / บาท)</label>
-                                <input type="number" step="any" name="discount_amount" class="form-control" value="0" placeholder="กรอกส่วนลด">
+
+                            <!-- ส่วนลด และ เบี้ยค่าปรับ (จัดให้อยู่คู่กันซ้ายขวาเพื่อความประหยัดพื้นที่และสบายตา) -->
+                            <div class="row g-2 mb-3">
+                                <div class="col-6">
+                                    <label class="form-label text-danger small fw-bold">ส่วนลด (บาท)</label>
+                                    <input type="number" step="any" name="discount_amount" class="form-control form-control-sm" value="0" placeholder="0">
+                                </div>
+                                <div class="col-6">
+                                    <label class="form-label text-warning text-dark small fw-bold">เบี้ยค่าปรับ (บาท)</label>
+                                    <input type="number" step="any" name="fine_amount" class="form-control form-control-sm" value="0" placeholder="0">
+                                </div>
                             </div>
-                            <div class="mb-3">
-                                <label class="form-label text-warning text-dark fw-bold">เบี้ยค่าปรับ (บาท)</label>
-                                <input type="number" step="any" name="fine_amount" class="form-control" value="0" placeholder="กรอกค่าปรับ">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label text-info fw-bold">วันที่ปิดยอด / วันที่คืนยอด (เลือกถ้าย้อนหลังหรือปิดบัญชี)</label>
-                                <input type="date" name="closed_date" class="form-control" value="{closed_date_str}">
-                            </div>
-                            <div class="mb-3">
-                                <label class="form-label text-success fw-bold">ปรับเปลี่ยนสถานะรายการ</label>
-                                <select name="new_status" class="form-select border-success" id="newStatus{tx.id}">
+
+                            <!-- ปรับเปลี่ยนสถานะรายการ -->
+                            <div class="mb-2">
+                                <label class="form-label text-success fw-bold">สถานะรายการ</label>
+                                <select name="new_status" class="form-select form-select-sm border-success" id="newStatus{tx.id}">
                                     <option value="ปกติ" {"selected" if tx.status == "ปกติ" else ""}>ปกติ</option>
                                     <option value="ตัดยอดบางส่วน" {"selected" if tx.status == "ตัดยอดบางส่วน" else ""}>ตัดยอดบางส่วน</option>
                                     <option value="คืนแล้ว" {"selected" if tx.status == "คืนแล้ว" else ""}>คืนแล้ว</option>
                                 </select>
                             </div>
                         </div>
-                        <div class="modal-footer">
-                            <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">ยกเลิก</button>
-                            <button type="submit" class="btn btn-warning" onclick="closeAllModals()">บันทึกการชำระ</button>
+                        <div class="modal-footer bg-light">
+                            <button type="button" class="btn btn-secondary btn-sm" data-bs-dismiss="modal">ยกเลิก</button>
+                            <button type="submit" class="btn btn-warning btn-sm fw-bold px-4" onclick="closeAllModals()">บันทึกการชำระ</button>
                         </div>
                     </form>
                 </div>
@@ -475,7 +512,7 @@ def index():
             </div>
             <div class="col-md-3">
                 <label class="form-label">เบอร์โทร</label>
-                <input type="text" name="phone" class="form-control">
+                <input type="text" name="phone" class="form-control" autocomplete="tel">
             </div>
             <div class="col-md-3">
                 <label class="form-label">วันที่กู้/วันที่เริ่ม (ย้อนหลังได้)</label>
