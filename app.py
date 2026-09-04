@@ -471,7 +471,7 @@ def index():
             </div>
             <div class="col-md-3">
                 <label class="form-label">ชื่อลูกค้า</label>
-                <input type="text" name="customer_name" class="form-control" required>
+                <input type="text" name="customer_name" class="form-control" autocomplete="name" required>
             </div>
             <div class="col-md-3">
                 <label class="form-label">เบอร์โทร</label>
