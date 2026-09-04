@@ -1,6 +1,6 @@
 from flask import Flask, render_template_string, request, redirect, url_for, session, send_file
 from flask_sqlalchemy import SQLAlchemy
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 from collections import defaultdict
 import os
 import io
@@ -18,6 +18,12 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'your_secret_key_thonglon_2026'
 db = SQLAlchemy(app)
 
+# กำหนดโซนเวลาประเทศไทย (UTC+7)
+TH_TIMEZONE = timezone(timedelta(hours=7))
+
+def get_thai_today():
+    return datetime.now(TH_TIMEZONE).date()
+
 VALID_USERS = {
     'nueng': '909090',
     'nice': '022540'
@@ -30,7 +36,7 @@ class Transaction(db.Model):
     customer_name = db.Column(db.String(100), nullable=False)
     phone = db.Column(db.String(20), nullable=True)
     sales_name = db.Column(db.String(100), nullable=False)
-    start_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
+    start_date = db.Column(db.Date, nullable=False, default=get_thai_today)
     last_payment_date = db.Column(db.Date, nullable=True)
     closed_date = db.Column(db.Date, nullable=True)
     original_principal = db.Column(db.Float, nullable=False, default=0.0)
@@ -239,7 +245,8 @@ BASE_LAYOUT = """
 """
 
 def calculate_tx_values(tx):
-    end_date = tx.closed_date if tx.closed_date else datetime.now().date()
+    thai_today = get_thai_today()
+    end_date = tx.closed_date if tx.closed_date else thai_today
     
     days = (end_date - tx.start_date).days + 1
     if days < 1:
@@ -273,7 +280,7 @@ def index():
         try:
             p_val = float(request.form.get('principal', 0))
             custom_start_date = request.form.get('start_date')
-            parsed_date = datetime.strptime(custom_start_date, '%Y-%m-%d').date() if custom_start_date else datetime.utcnow().date()
+            parsed_date = datetime.strptime(custom_start_date, '%Y-%m-%d').date() if custom_start_date else get_thai_today()
             current_sales = session.get('admin', 'unknown')
             d_interest = float(request.form.get('daily_interest', 0))
             tx_type = request.form.get('type')
@@ -320,7 +327,6 @@ def index():
     for tx in all_txs:
         calculate_tx_values(tx)
 
-    # ดึงรายชื่อลูกค้าทั้งหมดที่ไม่ซ้ำกันมาทำ Datalist แนะนำอัตโนมัติ
     unique_customers = sorted(list(set(t.customer_name for t in all_txs if t.customer_name)))
     datalist_options = "".join([f'<option value="{name}">' for name in unique_customers])
 
@@ -344,7 +350,7 @@ def index():
             badge_color = 'bg-secondary'
 
         start_date_str = tx.start_date.strftime('%d/%m/%Y') if tx.start_date else '-'
-        start_date_iso = tx.start_date.strftime('%Y-%m-%d') if tx.start_date else datetime.now().strftime('%Y-%m-%d')
+        start_date_iso = tx.start_date.strftime('%Y-%m-%d') if tx.start_date else get_thai_today().strftime('%Y-%m-%d')
         last_pay_str = tx.last_payment_date.strftime('%d/%m/%Y') if tx.last_payment_date else '-'
         closed_date_str = tx.closed_date.strftime('%Y-%m-%d') if tx.closed_date else ''
 
@@ -523,7 +529,7 @@ def index():
             </div>
             <div class="col-md-3">
                 <label class="form-label">วันที่กู้/วันที่เริ่ม (ย้อนหลังได้)</label>
-                <input type="date" name="start_date" class="form-control" value="{datetime.now().strftime('%Y-%m-%d')}" required>
+                <input type="date" name="start_date" class="form-control" value="{get_thai_today().strftime('%Y-%m-%d')}" required>
             </div>
             <div class="col-md-4">
                 <label class="form-label">ยอดเงินต้น/ยอดค้างทั้งหมด (บาท)</label>
@@ -611,7 +617,7 @@ def export_data():
     output.write(si.getvalue().encode('utf-8-sig'))
     output.seek(0)
     
-    filename = f"thonglon_backup_{datetime.now().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"thonglon_backup_{get_thai_today().strftime('%Y%m%d_%H%M%S')}.csv"
     return send_file(output, mimetype='text/csv', as_attachment=True, download_name=filename)
 
 @app.route('/import_data', methods=['POST'])
@@ -625,7 +631,7 @@ def import_data():
             stream = io.TextIOWrapper(file.stream, encoding='utf-8-sig')
             reader = csv.DictReader(stream)
             for row in reader:
-                s_date = datetime.utcnow().date()
+                s_date = get_thai_today()
                 if row.get('StartDate'):
                     try:
                         s_date = datetime.strptime(row['StartDate'].split()[0], '%Y-%m-%d').date()
@@ -674,7 +680,7 @@ def update_payment(tx_id):
         
     tx = Transaction.query.get_or_404(tx_id)
     payment_type = request.form.get('payment_type')
-    today = datetime.now().date()
+    thai_today = get_thai_today()
     discount_amt = float(request.form.get('discount_amount', 0))
     fine_amt = float(request.form.get('fine_amount', 0))
     new_status = request.form.get('new_status')
@@ -688,7 +694,7 @@ def update_payment(tx_id):
     else:
         tx.closed_date = None
 
-    calc_end_date = tx.closed_date if tx.closed_date else today
+    calc_end_date = tx.closed_date if tx.closed_date else thai_today
     days = (calc_end_date - tx.start_date).days + 1
     if days < 1:
         days = 1
@@ -698,7 +704,7 @@ def update_payment(tx_id):
     if total_acc_interest < 0:
         total_acc_interest = 0.0
 
-    tx.last_payment_date = today
+    tx.last_payment_date = thai_today
 
     if payment_type == 'full':
         full_collection = total_acc_interest + fine_amt
@@ -708,7 +714,7 @@ def update_payment(tx_id):
         tx.principal = 0.0
         tx.status = 'คืนแล้ว'
         if not tx.closed_date:
-            tx.closed_date = today
+            tx.closed_date = thai_today
     else:
         pay_amount = float(request.form.get('pay_amount', 0))
         effective_pay = pay_amount + fine_amt
@@ -733,7 +739,7 @@ def update_payment(tx_id):
             tx.status = 'คืนแล้ว'
             tx.principal = 0.0
             if not tx.closed_date:
-                tx.closed_date = today
+                tx.closed_date = thai_today
         elif tx.principal < tx.original_principal:
             tx.status = 'ตัดยอดบางส่วน'
         else:
