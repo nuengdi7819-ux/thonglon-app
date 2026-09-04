@@ -72,7 +72,6 @@ BASE_LAYOUT = """
         .table-responsive::-webkit-scrollbar-thumb { background: #d4af37; border-radius: 6px; }
         .table-responsive::-webkit-scrollbar-thumb:hover { background: #b38f27; }
 
-        /* จัดการ Modal ให้ไม่ล้นจอและเลื่อนภายในได้ */
         @media (max-width: 768px) {
             .modal-dialog {
                 margin: 10px;
@@ -321,6 +320,10 @@ def index():
     for tx in all_txs:
         calculate_tx_values(tx)
 
+    # ดึงรายชื่อลูกค้าทั้งหมดที่ไม่ซ้ำกันมาทำ Datalist แนะนำอัตโนมัติ
+    unique_customers = sorted(list(set(t.customer_name for t in all_txs if t.customer_name)))
+    datalist_options = "".join([f'<option value="{name}">' for name in unique_customers])
+
     total_new_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     total_debt_principal = sum(tx.principal for tx in all_txs if tx.type == 'ยอดค้างเก่า')
     total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า' and tx.status != 'คืนแล้ว' and tx.principal > 0)
@@ -509,7 +512,10 @@ def index():
             </div>
             <div class="col-md-3">
                 <label class="form-label">ชื่อลูกค้า</label>
-                <input type="text" name="customer_name" class="form-control" autocomplete="name" required>
+                <input type="text" name="customer_name" class="form-control" list="customerList" autocomplete="off" required>
+                <datalist id="customerList">
+                    {datalist_options}
+                </datalist>
             </div>
             <div class="col-md-3">
                 <label class="form-label">เบอร์โทร</label>
