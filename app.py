@@ -9,8 +9,6 @@ import math
 
 app = Flask(__name__)
 
-# เปลี่ยนมาใช้ Database บน Cloud (Supabase / PostgreSQL) เพื่อความปลอดภัย 100%
-# แทนที่ 'postgresql://...' ด้านล่างด้วย Connection URI ที่คัดลอกมาจาก Supabase ของคุณ
 DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres:[YOUR-PASSWORD]@db.xxxxxxx.supabase.co:5432/postgres')
 if DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
@@ -34,8 +32,9 @@ class Transaction(db.Model):
     sales_name = db.Column(db.String(100), nullable=False)
     start_date = db.Column(db.Date, nullable=False, default=datetime.utcnow)
     last_payment_date = db.Column(db.Date, nullable=True)
+    closed_date = db.Column(db.Date, nullable=True)  # เพิ่มฟิลด์วันที่ปิดยอด
     original_principal = db.Column(db.Float, nullable=False, default=0.0)
-    principal = db.Column(db.Float, nullable=False)                      
+    principal = db.Column(db.Float, nullable=False)                     
     daily_interest = db.Column(db.Float, nullable=False)
     initial_daily_interest = db.Column(db.Float, nullable=False, default=0.0)
     paid_interest = db.Column(db.Float, default=0.0)     
@@ -208,6 +207,34 @@ BASE_LAYOUT = """
 </html>
 """
 
+def calculate_tx_values(tx):
+    # ถ้ามีวันที่ปิดยอด (closed_date) ให้ใช้วันที่ปิดยอดเป็นวันสิ้นสุดการคำนวณดอกเบี้ย
+    # ถ้ายัังไม่มี ให้ใช้วันปัจจุบัน (datetime.now().date())
+    end_date = tx.closed_date if tx.closed_date else datetime.now().date()
+    
+    days = (end_date - tx.start_date).days + 1
+    if days < 1:
+        days = 1
+    tx.days_passed_val = days
+    
+    if tx.original_principal > 0 and tx.initial_daily_interest > 0:
+        current_daily_interest = tx.initial_daily_interest * (tx.principal / tx.original_principal)
+        tx.daily_interest = current_daily_interest
+    
+    acc = (tx.daily_interest * days) - tx.paid_interest
+    tx.accumulated_interest = acc if acc > 0 else 0.0
+    
+    if tx.type == 'ยอดค้างเก่า':
+        tx.total_paid = (tx.original_principal - tx.principal)
+    else:
+        tx.total_paid = tx.paid_interest
+
+    if tx.principal <= 0:
+        tx.status = 'คืนแล้ว'
+    elif tx.principal < tx.original_principal:
+        if tx.status == 'ปกติ':
+            tx.status = 'ตัดยอดบางส่วน'
+
 @app.route('/', methods=['GET', 'POST'])
 def index():
     if 'admin' not in session:
@@ -256,32 +283,14 @@ def index():
     else:
         transactions = Transaction.query.all()
 
-    today = datetime.now().date()
     for tx in transactions:
-        days = (today - tx.start_date).days + 1
-        if days < 1:
-            days = 1
-        tx.days_passed = f"{days} วัน"
-        
-        if tx.original_principal > 0 and tx.initial_daily_interest > 0:
-            current_daily_interest = tx.initial_daily_interest * (tx.principal / tx.original_principal)
-            tx.daily_interest = current_daily_interest
-        
-        acc = (tx.daily_interest * days) - tx.paid_interest
-        tx.accumulated_interest = acc if acc > 0 else 0.0
-        
-        if tx.type == 'ยอดค้างเก่า':
-            tx.total_paid = (tx.original_principal - tx.principal)
-        else:
-            tx.total_paid = tx.paid_interest
-
-        if tx.principal <= 0:
-            tx.status = 'คืนแล้ว'
-        elif tx.principal < tx.original_principal:
-            if tx.status == 'ปกติ':
-                tx.status = 'ตัดยอดบางส่วน'
+        calculate_tx_values(tx)
+        tx.days_passed = f"{tx.days_passed_val} วัน"
 
     all_txs = Transaction.query.all()
+    for tx in all_txs:
+        calculate_tx_values(tx)
+
     total_new_investment = sum(tx.original_principal for tx in all_txs if tx.type != 'ยอดค้างเก่า')
     total_debt_principal = sum(tx.principal for tx in all_txs if tx.type == 'ยอดค้างเก่า')
     total_new_principal = sum(tx.principal for tx in all_txs if tx.type != 'ยอดค้างเก่า' and tx.status != 'คืนแล้ว' and tx.principal > 0)
@@ -303,6 +312,7 @@ def index():
 
         start_date_str = tx.start_date.strftime('%d/%m/%Y') if tx.start_date else '-'
         last_pay_str = tx.last_payment_date.strftime('%d/%m/%Y') if tx.last_payment_date else '-'
+        closed_date_str = tx.closed_date.strftime('%Y-%m-%d') if tx.closed_date else ''
 
         display_daily_interest = f"{tx.daily_interest:,.2f}"
         display_days = tx.days_passed
@@ -396,6 +406,10 @@ def index():
                             <div class="mb-3">
                                 <label class="form-label text-warning text-dark fw-bold">เบี้ยค่าปรับ (บาท)</label>
                                 <input type="number" step="any" name="fine_amount" class="form-control" value="0" placeholder="กรอกค่าปรับ">
+                            </div>
+                            <div class="mb-3">
+                                <label class="form-label text-info fw-bold">วันที่ปิดยอด / วันที่คืนยอด (เลือกถ้าย้อนหลังหรือปิดบัญชี)</label>
+                                <input type="date" name="closed_date" class="form-control" value="{closed_date_str}">
                             </div>
                             <div class="mb-3">
                                 <label class="form-label text-success fw-bold">ปรับเปลี่ยนสถานะรายการ</label>
@@ -538,7 +552,7 @@ def export_data():
     
     si = io.StringIO()
     cw = csv.writer(si)
-    cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status', 'InstallmentAmount', 'TotalPaid'])
+    cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'ClosedDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status', 'InstallmentAmount', 'TotalPaid'])
     
     txs = Transaction.query.all()
     for t in txs:
@@ -547,7 +561,7 @@ def export_data():
         else:
             total_paid = t.paid_interest
             
-        cw.writerow([t.id, t.type, t.customer_name, t.phone, t.sales_name, t.start_date, t.original_principal, t.principal, t.daily_interest, t.paid_interest, t.status, t.installment_amount, total_paid])
+        cw.writerow([t.id, t.type, t.customer_name, t.phone, t.sales_name, t.start_date, t.closed_date, t.original_principal, t.principal, t.daily_interest, t.paid_interest, t.status, t.installment_amount, total_paid])
     
     output = io.BytesIO()
     output.write(si.getvalue().encode('utf-8-sig'))
@@ -577,12 +591,23 @@ def import_data():
                         except:
                             pass
 
+                c_date = None
+                if row.get('ClosedDate'):
+                    try:
+                        c_date = datetime.strptime(row['ClosedDate'].split()[0], '%Y-%m-%d').date()
+                    except:
+                        try:
+                            c_date = datetime.strptime(row['ClosedDate'].split()[0], '%d/%m/%Y').date()
+                        except:
+                            pass
+
                 new_t = Transaction(
                     type=row.get('Type', 'เงินฉุกเฉิน'),
                     customer_name=row.get('CustomerName', 'ไม่ระบุ'),
                     phone=row.get('Phone', ''),
                     sales_name=row.get('SalesName', session.get('admin')),
                     start_date=s_date,
+                    closed_date=c_date,
                     original_principal=float(row.get('OriginalPrincipal', 0)),
                     principal=float(row.get('Principal', 0)),
                     daily_interest=float(row.get('DailyInterest', 0)),
@@ -609,8 +634,18 @@ def update_payment(tx_id):
     discount_amt = float(request.form.get('discount_amount', 0))
     fine_amt = float(request.form.get('fine_amount', 0))
     new_status = request.form.get('new_status')
+    closed_date_str = request.form.get('closed_date')
     
-    days = (today - tx.start_date).days + 1
+    if closed_date_str:
+        try:
+            tx.closed_date = datetime.strptime(closed_date_str, '%Y-%m-%d').date()
+        except:
+            tx.closed_date = None
+    else:
+        tx.closed_date = None
+
+    calc_end_date = tx.closed_date if tx.closed_date else today
+    days = (calc_end_date - tx.start_date).days + 1
     if days < 1:
         days = 1
         
@@ -628,6 +663,8 @@ def update_payment(tx_id):
             
         tx.principal = 0.0
         tx.status = 'คืนแล้ว'
+        if not tx.closed_date:
+            tx.closed_date = today
     else:
         pay_amount = float(request.form.get('pay_amount', 0))
         effective_pay = pay_amount + fine_amt
@@ -647,10 +684,13 @@ def update_payment(tx_id):
                 tx.principal -= discount_amt
                 if tx.principal < 0:
                     tx.principal = 0.0
+            # ตามเงื่อนไข: หากจ่ายดอกเบี้ยยังไม่หมด ให้คงยอดเงินต้นเดิมไว้ (ไม่ไปลดทอนต้น)
             
         if tx.principal <= 0:
             tx.status = 'คืนแล้ว'
             tx.principal = 0.0
+            if not tx.closed_date:
+                tx.closed_date = today
         elif tx.principal < tx.original_principal:
             tx.status = 'ตัดยอดบางส่วน'
         else:
@@ -677,22 +717,10 @@ def members():
         return redirect(url_for('login'))
     
     txs = Transaction.query.all()
-    today = datetime.now().date()
     rows = ""
     for t in txs:
-        days = (today - t.start_date).days + 1
-        if days < 1:
-            days = 1
-        
-        if t.principal <= 0:
-            t.status = 'คืนแล้ว'
-        elif t.principal < t.original_principal and t.status == 'ปกติ':
-            t.status = 'ตัดยอดบางส่วน'
-
-        eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
-        acc = (eff_daily * days) - t.paid_interest
-        acc_interest = acc if acc > 0 else 0.0
-        total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
+        calculate_tx_values(t)
+        start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
         
         rows += f"""
         <tr>
@@ -700,12 +728,12 @@ def members():
             <td>{t.phone or '-'}</td>
             <td><span class="badge bg-danger">{t.sales_name}</span></td>
             <td><span class="badge bg-secondary">{t.type}</span></td>
-            <td>{t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'}</td>
+            <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
-            <td><strong>{total_paid:,.2f}</strong></td>
-            <td>{eff_daily:,.2f}</td>
-            <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
+            <td><strong>{t.total_paid:,.2f}</strong></td>
+            <td>{t.daily_interest:,.2f}</td>
+            <td class="text-danger fw-bold">{t.accumulated_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
         """
@@ -744,14 +772,9 @@ def sales_members():
         return redirect(url_for('login'))
     
     all_txs = Transaction.query.all()
-    today = datetime.now().date()
     sales_data = {}
     for tx in all_txs:
-        if tx.principal <= 0:
-            tx.status = 'คืนแล้ว'
-        elif tx.principal < tx.original_principal and tx.status == 'ปกติ':
-            tx.status = 'ตัดยอดบางส่วน'
-
+        calculate_tx_values(tx)
         if tx.sales_name not in sales_data:
             sales_data[tx.sales_name] = []
         sales_data[tx.sales_name].append(tx)
@@ -760,25 +783,18 @@ def sales_members():
     for sales, txs in sales_data.items():
         sub_rows = ""
         for t in txs:
-            days = (today - t.start_date).days + 1
-            if days < 1:
-                days = 1
-            eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
-            acc = (eff_daily * days) - t.paid_interest
-            acc_interest = acc if acc > 0 else 0.0
-            total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
-            
+            start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
             sub_rows += f"""
             <tr>
                 <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{t.customer_name}</td>
                 <td>{t.phone or '-'}</td>
                 <td><span class="badge bg-secondary">{t.type}</span></td>
-                <td>{t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'}</td>
+                <td>{start_str}</td>
                 <td>{t.original_principal:,.2f}</td>
                 <td>{t.principal:,.2f}</td>
-                <td><strong>{total_paid:,.2f}</strong></td>
-                <td>{eff_daily:,.2f}</td>
-                <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
+                <td><strong>{t.total_paid:,.2f}</strong></td>
+                <td>{t.daily_interest:,.2f}</td>
+                <td class="text-danger fw-bold">{t.accumulated_interest:,.2f}</td>
                 <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
             </tr>
             """
@@ -819,22 +835,10 @@ def customer_summary():
         return redirect(url_for('login'))
     
     txs = Transaction.query.all()
-    today = datetime.now().date()
     customer_rows = ""
     for t in txs:
-        if t.principal <= 0:
-            t.status = 'คืนแล้ว'
-        elif t.principal < t.original_principal and t.status == 'ปกติ':
-            t.status = 'ตัดยอดบางส่วน'
-
-        days = (today - t.start_date).days + 1
-        if days < 1:
-            days = 1
-        eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
-        acc = (eff_daily * days) - t.paid_interest
-        acc_interest = acc if acc > 0 else 0.0
+        calculate_tx_values(t)
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
-        total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
         
         customer_rows += f"""
         <tr>
@@ -845,9 +849,9 @@ def customer_summary():
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
-            <td><strong>{total_paid:,.2f}</strong></td>
-            <td>{eff_daily:,.2f}</td>
-            <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
+            <td><strong>{t.total_paid:,.2f}</strong></td>
+            <td>{t.daily_interest:,.2f}</td>
+            <td class="text-danger fw-bold">{t.accumulated_interest:,.2f}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
@@ -890,22 +894,10 @@ def customer_emergency():
         return redirect(url_for('login'))
     
     txs = Transaction.query.filter_by(type='เงินฉุกเฉิน').all()
-    today = datetime.now().date()
     customer_rows = ""
     for t in txs:
-        if t.principal <= 0:
-            t.status = 'คืนแล้ว'
-        elif t.principal < t.original_principal and t.status == 'ปกติ':
-            t.status = 'ตัดยอดบางส่วน'
-
-        days = (today - t.start_date).days + 1
-        if days < 1:
-            days = 1
-        eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
-        acc = (eff_daily * days) - t.paid_interest
-        acc_interest = acc if acc > 0 else 0.0
+        calculate_tx_values(t)
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
-        total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
         
         customer_rows += f"""
         <tr>
@@ -915,9 +907,9 @@ def customer_emergency():
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
-            <td><strong>{total_paid:,.2f}</strong></td>
-            <td>{eff_daily:,.2f}</td>
-            <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
+            <td><strong>{t.total_paid:,.2f}</strong></td>
+            <td>{t.daily_interest:,.2f}</td>
+            <td class="text-danger fw-bold">{t.accumulated_interest:,.2f}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
@@ -959,22 +951,10 @@ def customer_gold():
         return redirect(url_for('login'))
     
     txs = Transaction.query.filter_by(type='ผ่อนทอง').all()
-    today = datetime.now().date()
     customer_rows = ""
     for t in txs:
-        if t.principal <= 0:
-            t.status = 'คืนแล้ว'
-        elif t.principal < t.original_principal and t.status == 'ปกติ':
-            t.status = 'ตัดยอดบางส่วน'
-
-        days = (today - t.start_date).days + 1
-        if days < 1:
-            days = 1
-        eff_daily = t.initial_daily_interest * (t.principal / t.original_principal) if t.original_principal > 0 else t.daily_interest
-        acc = (eff_daily * days) - t.paid_interest
-        acc_interest = acc if acc > 0 else 0.0
+        calculate_tx_values(t)
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
-        total_paid = (t.original_principal - t.principal) if t.type == 'ยอดค้างเก่า' else t.paid_interest
         
         customer_rows += f"""
         <tr>
@@ -984,9 +964,9 @@ def customer_gold():
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
-            <td><strong>{total_paid:,.2f}</strong></td>
-            <td>{eff_daily:,.2f}</td>
-            <td class="text-danger fw-bold">{acc_interest:,.2f}</td>
+            <td><strong>{t.total_paid:,.2f}</strong></td>
+            <td>{t.daily_interest:,.2f}</td>
+            <td class="text-danger fw-bold">{t.accumulated_interest:,.2f}</td>
             <td>{t.paid_interest:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
@@ -1030,13 +1010,8 @@ def customer_debt():
     txs = Transaction.query.filter_by(type='ยอดค้างเก่า').all()
     customer_rows = ""
     for t in txs:
-        if t.principal <= 0:
-            t.status = 'คืนแล้ว'
-        elif t.principal < t.original_principal and t.status == 'ปกติ':
-            t.status = 'ตัดยอดบางส่วน'
-
+        calculate_tx_values(t)
         start_str = t.start_date.strftime('%d/%m/%Y') if t.start_date else '-'
-        total_paid = t.original_principal - t.principal
         
         total_installments = 0
         remaining_installments = 0
@@ -1055,10 +1030,10 @@ def customer_debt():
             <td>{start_str}</td>
             <td>{t.original_principal:,.2f}</td>
             <td>{t.principal:,.2f}</td>
-            <td><strong>{total_paid:,.2f}</strong></td>
+            <td><strong>{t.total_paid:,.2f}</strong></td>
             <td>{t.daily_interest:,.2f}</td>
             <td class="text-danger fw-bold">{installment_info}</td>
-            <td class="text-success fw-bold">{total_paid:,.2f}</td>
+            <td class="text-success fw-bold">{t.total_paid:,.2f}</td>
             <td><span class="badge {'bg-success' if t.status=='ปกติ' else ('bg-info text-dark' if t.status=='ตัดยอดบางส่วน' else 'bg-secondary')}">{t.status}</span></td>
         </tr>
         """
