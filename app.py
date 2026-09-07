@@ -18,7 +18,6 @@ app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
 app.config['SECRET_KEY'] = 'your_secret_key_thonglon_2026'
 db = SQLAlchemy(app)
 
-# กำหนดโซนเวลาประเทศไทย (UTC+7)
 TH_TIMEZONE = timezone(timedelta(hours=7))
 
 def get_thai_today():
@@ -127,6 +126,7 @@ BASE_LAYOUT = """
         <div class="mb-3 px-2 d-none d-lg-block text-warning small border-bottom border-secondary pb-2">ผู้ใช้งาน: <b>{{ session.get('admin') }}</b></div>
         <ul class="nav nav-pills flex-column mb-auto">
             <li class="nav-item"><a href="/" class="nav-link {% if page == 'dashboard' %}active{% endif %}" onclick="toggleSidebar()">📊 Dashboard</a></li>
+            <li><a href="/?filter_today=1" class="nav-link {% if page == 'today' %}active{% endif %}" onclick="toggleSidebar()">📋 เช็คยอดความเคลื่อนไหววันนี้</a></li>
             <li><a href="/members" class="nav-link {% if page == 'members' %}active{% endif %}" onclick="toggleSidebar()">👥 1. สมาชิกทั้งหมด</a></li>
             <li><a href="/sales_members" class="nav-link {% if page == 'sales' %}active{% endif %}" onclick="toggleSidebar()">📋 2. สมาชิกภายใต้เซลล์</a></li>
             <li><a href="/customer_summary" class="nav-link {% if page == 'customer' %}active{% endif %}" onclick="toggleSidebar()">📂 3. สรุปลูกค้า</a></li>
@@ -311,13 +311,24 @@ def index():
         return redirect(url_for('index'))
 
     search_query = request.args.get('search', '').strip()
+    filter_today = request.args.get('filter_today', '').strip()
+    thai_today = get_thai_today()
+
+    query = Transaction.query
     if search_query:
-        transactions = Transaction.query.filter(
+        query = query.filter(
             (Transaction.customer_name.contains(search_query)) | 
             (Transaction.phone.contains(search_query))
-        ).order_by(Transaction.id.desc()).all()
-    else:
-        transactions = Transaction.query.order_by(Transaction.id.desc()).all()
+        )
+    
+    if filter_today == '1':
+        query = query.filter(
+            (Transaction.start_date == thai_today) | 
+            (Transaction.last_payment_date == thai_today)
+        )
+
+    # Dashboard ยังคงเรียงรายการล่าสุดขึ้นก่อน (id.desc()) ตามเดิม
+    transactions = query.order_by(Transaction.id.desc()).all()
 
     for tx in transactions:
         calculate_tx_values(tx)
@@ -350,7 +361,7 @@ def index():
             badge_color = 'bg-secondary'
 
         start_date_str = tx.start_date.strftime('%d/%m/%Y') if tx.start_date else '-'
-        start_date_iso = tx.start_date.strftime('%Y-%m-%d') if tx.start_date else get_thai_today().strftime('%Y-%m-%d')
+        start_date_iso = tx.start_date.strftime('%Y-%m-%d') if tx.start_date else thai_today.strftime('%Y-%m-%d')
         last_pay_str = tx.last_payment_date.strftime('%d/%m/%Y') if tx.last_payment_date else '-'
         closed_date_str = tx.closed_date.strftime('%Y-%m-%d') if tx.closed_date else ''
 
@@ -359,7 +370,6 @@ def index():
         display_acc_interest = f"{tx.accumulated_interest:,.2f}"
         display_total_paid = f"{tx.total_paid:,.2f}"
         
-        # Desktop Table Row
         rows += f"""
         <tr>
             <td style="position: sticky; left: 0; background-color: #fff; z-index: 2; font-weight: 500;">{tx.customer_name}</td>
@@ -383,7 +393,6 @@ def index():
         </tr>
         """
 
-        # Mobile Card View
         cards += f"""
         <div class="card mb-3 shadow-sm border-warning">
             <div class="card-body p-3">
@@ -477,6 +486,9 @@ def index():
         </div>
         """
 
+    table_title = "📋 รายการความเคลื่อนไหววันนี้" if filter_today == '1' else "📋 รายการทั้งหมด"
+    view_all_btn = '<a href="/" class="btn btn-sm btn-success fw-bold">🟢 แสดงรายการทั้งหมด</a>' if filter_today == '1' else ''
+
     content = f"""
     <div class="row mb-4">
         <div class="col-md mb-3">
@@ -529,7 +541,7 @@ def index():
             </div>
             <div class="col-md-3">
                 <label class="form-label">วันที่กู้/วันที่เริ่ม (ย้อนหลังได้)</label>
-                <input type="date" name="start_date" class="form-control" value="{get_thai_today().strftime('%Y-%m-%d')}" required>
+                <input type="date" name="start_date" class="form-control" value="{thai_today.strftime('%Y-%m-%d')}" required>
             </div>
             <div class="col-md-4">
                 <label class="form-label">ยอดเงินต้น/ยอดค้างทั้งหมด (บาท)</label>
@@ -551,8 +563,14 @@ def index():
 
     <div class="card p-4 shadow-sm border-warning">
         <div class="d-flex justify-content-between align-items-center mb-3 flex-wrap gap-2">
-            <h4 class="mb-0 fs-5 text-danger fw-bold">📋 รายการทั้งหมด</h4>
+            <div class="d-flex align-items-center gap-3 flex-wrap">
+                <h4 class="mb-0 fs-5 text-danger fw-bold">{table_title}</h4>
+                {view_all_btn}
+            </div>
             <form method="GET" class="d-flex">
+                {% if filter_today == '1' %}
+                <input type="hidden" name="filter_today" value="1">
+                {% endif %}
                 <input type="text" name="search" class="form-control form-control-sm me-2" placeholder="ค้นหาชื่อ หรือเบอร์โทร..." value="{search_query}">
                 <button type="submit" class="btn btn-sm btn-outline-danger">ค้นหา</button>
             </form>
@@ -578,22 +596,23 @@ def index():
                     </tr>
                 </thead>
                 <tbody>
-                    {rows if rows else "<tr><td colspan='13' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
+                    {rows if rows else "<tr><td colspan='13' class='text-center text-muted'>ยังไม่มีข้อมูลรายการในวันนี้</td></tr>"}
                 </tbody>
             </table>
         </div>
 
         <div class="mobile-card-view">
-            {cards if cards else "<p class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</p>"}
+            {cards if cards else "<p class='text-center text-muted'>ยังไม่มีข้อมูลรายการในวันนี้</p>"}
         </div>
     </div>
 
     {modals_html}
     """
 
+    page_type = 'today' if filter_today == '1' else 'dashboard'
     html = BASE_LAYOUT.replace('{% block header %}Dashboard{% endblock %}', '🔱 Dashboard บริหารจัดการระบบ')
     html = html.replace('{% block content %}{% endblock %}', content)
-    return render_template_string(html, title="Dashboard", page="dashboard")
+    return render_template_string(html, title="Dashboard", page=page_type, filter_today=filter_today)
 
 @app.route('/export_data')
 def export_data():
@@ -604,7 +623,7 @@ def export_data():
     cw = csv.writer(si)
     cw.writerow(['ID', 'Type', 'CustomerName', 'Phone', 'SalesName', 'StartDate', 'ClosedDate', 'OriginalPrincipal', 'Principal', 'DailyInterest', 'PaidInterest', 'Status', 'InstallmentAmount', 'TotalPaid'])
     
-    txs = Transaction.query.order_by(Transaction.id.desc()).all()
+    txs = Transaction.query.order_by(Transaction.customer_name.asc()).all()
     for t in txs:
         if t.type == 'ยอดค้างเก่า':
             total_paid = (t.original_principal - t.principal)
@@ -765,7 +784,8 @@ def members():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.order_by(Transaction.id.desc()).all()
+    # เรียงตามตัวอักษรของชื่อลูกค้า (customer_name)
+    txs = Transaction.query.order_by(Transaction.customer_name.asc()).all()
     rows = ""
     for t in txs:
         calculate_tx_values(t)
@@ -789,7 +809,7 @@ def members():
     
     content = f"""
     <div class="card p-4 shadow-sm border-warning">
-        <h4 class="mb-3 fs-5 text-danger fw-bold">👥 รายชื่อสมาชิกทั้งหมด</h4>
+        <h4 class="mb-3 fs-5 text-danger fw-bold">👥 รายชื่อสมาชิกทั้งหมด (เรียงตามตัวอักษร)</h4>
         <div class="table-responsive">
             <table class="table table-striped text-nowrap align-middle">
                 <thead class="table-dark">
@@ -820,12 +840,11 @@ def sales_members():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    all_txs = Transaction.query.order_by(Transaction.id.desc()).all()
-    sales_data = {}
+    # เรียงตามตัวอักษรชื่อลูกค้า
+    all_txs = Transaction.query.order_by(Transaction.customer_name.asc()).all()
+    sales_data = defaultdict(list)
     for tx in all_txs:
         calculate_tx_values(tx)
-        if tx.sales_name not in sales_data:
-            sales_data[tx.sales_name] = []
         sales_data[tx.sales_name].append(tx)
 
     sales_content = ""
@@ -883,7 +902,8 @@ def customer_summary():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.order_by(Transaction.id.desc()).all()
+    # เรียงตามตัวอักษรชื่อลูกค้า
+    txs = Transaction.query.order_by(Transaction.customer_name.asc()).all()
     customer_rows = ""
     for t in txs:
         calculate_tx_values(t)
@@ -908,7 +928,7 @@ def customer_summary():
 
     content = f"""
     <div class="card p-4 shadow-sm border-warning">
-        <h4 class="mb-3 fs-5 text-danger fw-bold">📂 สรุปข้อมูลลูกค้าทั้งหมด</h4>
+        <h4 class="mb-3 fs-5 text-danger fw-bold">📂 สรุปข้อมูลลูกค้าทั้งหมด (เรียงตามตัวอักษร)</h4>
         <div class="table-responsive">
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
@@ -942,7 +962,8 @@ def customer_emergency():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.filter_by(type='เงินฉุกเฉิน').order_by(Transaction.id.desc()).all()
+    # เรียงตามตัวอักษรชื่อลูกค้า
+    txs = Transaction.query.filter_by(type='เงินฉุกเฉิน').order_by(Transaction.customer_name.asc()).all()
     customer_rows = ""
     for t in txs:
         calculate_tx_values(t)
@@ -966,7 +987,7 @@ def customer_emergency():
 
     content = f"""
     <div class="card p-4 shadow-sm border-warning">
-        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: เงินฉุกเฉิน (ลูกค้าใหม่)</h4>
+        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: เงินฉุกเฉิน (เรียงตามตัวอักษร)</h4>
         <div class="table-responsive">
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
@@ -999,7 +1020,8 @@ def customer_gold():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.filter_by(type='ผ่อนทอง').order_by(Transaction.id.desc()).all()
+    # เรียงตามตัวอักษรชื่อลูกค้า
+    txs = Transaction.query.filter_by(type='ผ่อนทอง').order_by(Transaction.customer_name.asc()).all()
     customer_rows = ""
     for t in txs:
         calculate_tx_values(t)
@@ -1023,7 +1045,7 @@ def customer_gold():
 
     content = f"""
     <div class="card p-4 shadow-sm border-warning">
-        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: ผ่อนทอง (ลูกค้าใหม่)</h4>
+        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: ผ่อนทอง (เรียงตามตัวอักษร)</h4>
         <div class="table-responsive">
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
@@ -1056,7 +1078,8 @@ def customer_debt():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    txs = Transaction.query.filter_by(type='ยอดค้างเก่า').order_by(Transaction.id.desc()).all()
+    # เรียงตามตัวอักษรชื่อลูกค้า
+    txs = Transaction.query.filter_by(type='ยอดค้างเก่า').order_by(Transaction.customer_name.asc()).all()
     customer_rows = ""
     for t in txs:
         calculate_tx_values(t)
@@ -1089,7 +1112,7 @@ def customer_debt():
 
     content = f"""
     <div class="card p-4 shadow-sm border-warning">
-        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: ยอดค้างเก่า (ลูกค้าเก่า - แบ่งจ่ายเป็นงวด)</h4>
+        <h4 class="mb-3 fs-5 text-danger fw-bold">🔸 สรุปข้อมูลลูกค้า: ยอดค้างเก่า (เรียงตามตัวอักษร)</h4>
         <div class="table-responsive">
             <table class="table table-striped align-middle text-nowrap">
                 <thead class="table-dark">
