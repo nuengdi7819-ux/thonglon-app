@@ -10,7 +10,7 @@ import math
 app = Flask(__name__)
 
 DATABASE_URL = os.environ.get('DATABASE_URL', 'postgresql://postgres:[YOUR-PASSWORD]@db.xxxxxxx.supabase.co:5432/postgres')
-if DATABASE_URL.startswith("postgres://"):
+if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
     DATABASE_URL = DATABASE_URL.replace("postgres://", "postgresql://", 1)
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
@@ -327,7 +327,6 @@ def index():
             (Transaction.last_payment_date == thai_today)
         )
 
-    # Dashboard ยังคงเรียงรายการล่าสุดขึ้นก่อน (id.desc()) ตามเดิม
     transactions = query.order_by(Transaction.id.desc()).all()
 
     for tx in transactions:
@@ -784,7 +783,6 @@ def members():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    # เรียงตามตัวอักษรของชื่อลูกค้า (customer_name)
     txs = Transaction.query.order_by(Transaction.customer_name.asc()).all()
     rows = ""
     for t in txs:
@@ -840,7 +838,6 @@ def sales_members():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    # เรียงตามตัวอักษรชื่อลูกค้า
     all_txs = Transaction.query.order_by(Transaction.customer_name.asc()).all()
     sales_data = defaultdict(list)
     for tx in all_txs:
@@ -902,7 +899,6 @@ def customer_summary():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    # เรียงตามตัวอักษรชื่อลูกค้า
     txs = Transaction.query.order_by(Transaction.customer_name.asc()).all()
     customer_rows = ""
     for t in txs:
@@ -962,7 +958,6 @@ def customer_emergency():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    # เรียงตามตัวอักษรชื่อลูกค้า
     txs = Transaction.query.filter_by(type='เงินฉุกเฉิน').order_by(Transaction.customer_name.asc()).all()
     customer_rows = ""
     for t in txs:
@@ -1020,7 +1015,6 @@ def customer_gold():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    # เรียงตามตัวอักษรชื่อลูกค้า
     txs = Transaction.query.filter_by(type='ผ่อนทอง').order_by(Transaction.customer_name.asc()).all()
     customer_rows = ""
     for t in txs:
@@ -1078,7 +1072,6 @@ def customer_debt():
     if 'admin' not in session:
         return redirect(url_for('login'))
     
-    # เรียงตามตัวอักษรชื่อลูกค้า
     txs = Transaction.query.filter_by(type='ยอดค้างเก่า').order_by(Transaction.customer_name.asc()).all()
     customer_rows = ""
     for t in txs:
