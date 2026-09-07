@@ -313,6 +313,7 @@ def index():
     search_query = request.args.get('search', '').strip()
     filter_today = request.args.get('filter_today', '').strip()
     target_date_str = request.args.get('target_date', '').strip()
+    month_filter = request.args.get('month', '').strip()
     thai_today = get_thai_today()
 
     query = Transaction.query
@@ -336,6 +337,12 @@ def index():
             )
         except Exception as e:
             print("Date parse error:", e)
+    elif month_filter:
+        # กรองตามเดือนที่คลิกมาจากหน้าสรุปรายเดือน (เช่น '2026-09')
+        query = query.filter(
+            db.extract('year', Transaction.start_date) == int(month_filter.split('-')[0]),
+            db.extract('month', Transaction.start_date) == int(month_filter.split('-')[1])
+        )
 
     # เรียงลำดับชื่อลูกค้าตามหมวดอักษร (A-Z / ก-ฮ)
     transactions = query.order_by(Transaction.customer_name.asc()).all()
@@ -505,6 +512,9 @@ def index():
         view_all_btn = '<a href="/" class="btn btn-sm btn-success fw-bold">🟢 แสดงรายการทั้งหมด</a>'
     elif target_date_str:
         table_title = f"📋 รายการความเคลื่อนไหววันที่: {target_date_str}"
+        view_all_btn = '<a href="/" class="btn btn-sm btn-success fw-bold">🟢 แสดงรายการทั้งหมด</a>'
+    elif month_filter:
+        table_title = f"📋 รายการประจำเดือน: {month_filter}"
         view_all_btn = '<a href="/" class="btn btn-sm btn-success fw-bold">🟢 แสดงรายการทั้งหมด</a>'
     else:
         table_title = "📋 รายการทั้งหมด"
@@ -1205,8 +1215,8 @@ def monthly_summary():
 
         monthly_rows += f"""
         <tr>
-            <td><b>{ym}</b></td>
-            <td>{d['count']} รายการ</td>
+            <td><a href="/?month={ym}" class="btn btn-sm btn-outline-danger fw-bold px-2 py-0">📅 {ym}</a></td>
+            <td><a href="/?month={ym}" class="btn btn-sm btn-warning fw-bold px-2 py-0">👁️ {d['count']} รายการ</a></td>
             <td class="text-primary">{d['new_investment']:,.2f}</td>
             <td class="text-success">{d['new_paid']:,.2f}</td>
             <td class="text-danger">{d['debt_start']:,.2f}</td>
@@ -1219,7 +1229,7 @@ def monthly_summary():
 
     content = f"""
     <div class="card p-4 shadow-sm border-warning mb-4">
-        <h4 class="mb-3 fs-5 text-danger fw-bold">📊 สรุปยอดผลประกอบการรายเดือน (เปรียบเทียบเชิงลึก)</h4>
+        <h4 class="mb-3 fs-5 text-danger fw-bold">📊 สรุปยอดผลประกอบการรายเดือน (คลิกที่เดือนหรือจำนวนรายการเพื่อดูรายละเอียด)</h4>
         <div class="table-responsive">
             <table class="table table-bordered text-nowrap align-middle">
                 <thead class="table-dark">
