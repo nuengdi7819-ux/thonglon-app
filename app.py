@@ -312,6 +312,7 @@ def index():
 
     search_query = request.args.get('search', '').strip()
     filter_today = request.args.get('filter_today', '').strip()
+    target_date_str = request.args.get('target_date', '').strip()
     thai_today = get_thai_today()
 
     query = Transaction.query
@@ -326,7 +327,17 @@ def index():
             (Transaction.start_date == thai_today) | 
             (Transaction.last_payment_date == thai_today)
         )
+    elif target_date_str:
+        try:
+            target_date = datetime.strptime(target_date_str, '%Y-%m-%d').date()
+            query = query.filter(
+                (Transaction.start_date == target_date) | 
+                (Transaction.last_payment_date == target_date)
+            )
+        except Exception as e:
+            print("Date parse error:", e)
 
+    # เรียงลำดับชื่อลูกค้าตามหมวดอักษร (A-Z / ก-ฮ)
     transactions = query.order_by(Transaction.customer_name.asc()).all()
 
     for tx in transactions:
@@ -489,14 +500,15 @@ def index():
         </div>
         """
 
-    table_title = "📋 รายการความเคลื่อนไหววันนี้" if filter_today == '1' else "📋 รายการทั้งหมด"
-    
     if filter_today == '1':
+        table_title = "📋 รายการความเคลื่อนไหววันนี้"
         view_all_btn = '<a href="/" class="btn btn-sm btn-success fw-bold">🟢 แสดงรายการทั้งหมด</a>'
-        hidden_filter_input = '<input type="hidden" name="filter_today" value="1">'
+    elif target_date_str:
+        table_title = f"📋 รายการความเคลื่อนไหววันที่: {target_date_str}"
+        view_all_btn = '<a href="/" class="btn btn-sm btn-success fw-bold">🟢 แสดงรายการทั้งหมด</a>'
     else:
+        table_title = "📋 รายการทั้งหมด"
         view_all_btn = ''
-        hidden_filter_input = ''
 
     content = f"""
     <div class="row mb-4">
@@ -576,9 +588,14 @@ def index():
                 <h4 class="mb-0 fs-5 text-danger fw-bold">{table_title}</h4>
                 {view_all_btn}
             </div>
-            <form method="GET" class="d-flex">
-                {hidden_filter_input}
-                <input type="text" name="search" class="form-control form-control-sm me-2" placeholder="ค้นหาชื่อ หรือเบอร์โทร..." value="{search_query}">
+            <form method="GET" class="d-flex align-items-center gap-2 flex-wrap">
+                <div class="d-flex align-items-center gap-1">
+                    <small class="text-muted">เลือกวันที่:</small>
+                    <input type="date" name="target_date" class="form-control form-control-sm" value="{target_date_str}">
+                </div>
+                <div class="d-flex align-items-center gap-1">
+                    <input type="text" name="search" class="form-control form-control-sm" placeholder="ค้นหาชื่อ หรือเบอร์โทร..." value="{search_query}">
+                </div>
                 <button type="submit" class="btn btn-sm btn-outline-danger">ค้นหา</button>
             </form>
         </div>
