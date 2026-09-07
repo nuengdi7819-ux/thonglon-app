@@ -327,7 +327,7 @@ def index():
             (Transaction.last_payment_date == thai_today)
         )
 
-    transactions = query.order_by(Transaction.id.desc()).all()
+    transactions = query.order_by(Transaction.customer_name.asc()).all()
 
     for tx in transactions:
         calculate_tx_values(tx)
@@ -423,6 +423,10 @@ def index():
         </div>
         """
 
+        selected_normal = "selected" if tx.status == "ปกติ" else ""
+        selected_partial = "selected" if tx.status == "ตัดยอดบางส่วน" else ""
+        selected_returned = "selected" if tx.status == "คืนแล้ว" else ""
+
         modals_html += f"""
         <div class="modal fade" id="payModal{tx.id}" tabindex="-1">
             <div class="modal-dialog modal-dialog-centered">
@@ -469,9 +473,9 @@ def index():
                             <div class="mb-1">
                                 <label class="form-label text-success fw-bold mb-1" style="font-size: 0.85rem;">สถานะรายการ</label>
                                 <select name="new_status" class="form-select form-select-sm border-success" id="newStatus{tx.id}">
-                                    <option value="ปกติ" {"selected" if tx.status == "ปกติ" else ""}>ปกติ</option>
-                                    <option value="ตัดยอดบางส่วน" {"selected" if tx.status == "ตัดยอดบางส่วน" else ""}>ตัดยอดบางส่วน</option>
-                                    <option value="คืนแล้ว" {"selected" if tx.status == "คืนแล้ว" else ""}>คืนแล้ว</option>
+                                    <option value="ปกติ" {selected_normal}>ปกติ</option>
+                                    <option value="ตัดยอดบางส่วน" {selected_partial}>ตัดยอดบางส่วน</option>
+                                    <option value="คืนแล้ว" {selected_returned}>คืนแล้ว</option>
                                 </select>
                             </div>
                         </div>
@@ -486,7 +490,13 @@ def index():
         """
 
     table_title = "📋 รายการความเคลื่อนไหววันนี้" if filter_today == '1' else "📋 รายการทั้งหมด"
-    view_all_btn = '<a href="/" class="btn btn-sm btn-success fw-bold">🟢 แสดงรายการทั้งหมด</a>' if filter_today == '1' else ''
+    
+    if filter_today == '1':
+        view_all_btn = '<a href="/" class="btn btn-sm btn-success fw-bold">🟢 แสดงรายการทั้งหมด</a>'
+        hidden_filter_input = '<input type="hidden" name="filter_today" value="1">'
+    else:
+        view_all_btn = ''
+        hidden_filter_input = ''
 
     content = f"""
     <div class="row mb-4">
@@ -567,9 +577,7 @@ def index():
                 {view_all_btn}
             </div>
             <form method="GET" class="d-flex">
-                {% if filter_today == '1' %}
-                <input type="hidden" name="filter_today" value="1">
-                {% endif %}
+                {hidden_filter_input}
                 <input type="text" name="search" class="form-control form-control-sm me-2" placeholder="ค้นหาชื่อ หรือเบอร์โทร..." value="{search_query}">
                 <button type="submit" class="btn btn-sm btn-outline-danger">ค้นหา</button>
             </form>
@@ -595,13 +603,13 @@ def index():
                     </tr>
                 </thead>
                 <tbody>
-                    {rows if rows else "<tr><td colspan='13' class='text-center text-muted'>ยังไม่มีข้อมูลรายการในวันนี้</td></tr>"}
+                    {rows if rows else "<tr><td colspan='13' class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</td></tr>"}
                 </tbody>
             </table>
         </div>
 
         <div class="mobile-card-view">
-            {cards if cards else "<p class='text-center text-muted'>ยังไม่มีข้อมูลรายการในวันนี้</p>"}
+            {cards if cards else "<p class='text-center text-muted'>ยังไม่มีข้อมูลรายการ</p>"}
         </div>
     </div>
 
