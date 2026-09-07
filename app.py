@@ -15,7 +15,7 @@ if DATABASE_URL and DATABASE_URL.startswith("postgres://"):
 
 app.config['SQLALCHEMY_DATABASE_URI'] = DATABASE_URL
 app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
-app.config['SECRET_KEY'] = 'your_secret_key_thonglon_2026'
+app.config['SECRET_KEY'] = 'your_secret_key_sublon_2026'
 db = SQLAlchemy(app)
 
 TH_TIMEZONE = timezone(timedelta(hours=7))
@@ -55,7 +55,7 @@ BASE_LAYOUT = """
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-    <title>{{ title }} - ทองล้น</title>
+    <title>{{ title }} - ทรัพย์ล้น</title>
     <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
     <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
     <style>
@@ -107,7 +107,7 @@ BASE_LAYOUT = """
     <div class="mobile-header shadow-sm">
         <div class="d-flex align-items-center gap-2">
             <button class="btn btn-outline-warning btn-sm" onclick="toggleSidebar()">☰ เมนู</button>
-            <h5 class="text-warning fw-bold mb-0">🔱 ทองล้น.com</h5>
+            <h5 class="text-warning fw-bold mb-0">🔱 ทรัพย์ล้น.com</h5>
         </div>
         <div class="d-flex align-items-center gap-2">
             <span class="badge bg-warning text-dark">{{ session.get('admin') }}</span>
@@ -119,7 +119,7 @@ BASE_LAYOUT = """
 
     <div class="sidebar p-3 d-flex flex-column shadow" id="sidebarMenu">
         <div class="d-flex justify-content-between align-items-center mb-2">
-            <h4 class="text-warning fw-bold d-none d-lg-block">🔱 ทองล้น.com</h4>
+            <h4 class="text-warning fw-bold d-none d-lg-block">🔱 ทรัพย์ล้น.com</h4>
             <h5 class="text-warning fw-bold d-lg-none">🔱 เมนูหลัก</h5>
             <button class="btn-close btn-close-white d-lg-none" onclick="toggleSidebar()"></button>
         </div>
@@ -338,13 +338,11 @@ def index():
         except Exception as e:
             print("Date parse error:", e)
     elif month_filter:
-        # กรองตามเดือนที่คลิกมาจากหน้าสรุปรายเดือน (เช่น '2026-09')
         query = query.filter(
             db.extract('year', Transaction.start_date) == int(month_filter.split('-')[0]),
             db.extract('month', Transaction.start_date) == int(month_filter.split('-')[1])
         )
 
-    # เรียงลำดับชื่อลูกค้าตามหมวดอักษร (A-Z / ก-ฮ)
     transactions = query.order_by(Transaction.customer_name.asc()).all()
 
     for tx in transactions:
@@ -670,7 +668,7 @@ def export_data():
     output.write(si.getvalue().encode('utf-8-sig'))
     output.seek(0)
     
-    filename = f"thonglon_backup_{get_thai_today().strftime('%Y%m%d_%H%M%S')}.csv"
+    filename = f"sublon_backup_{get_thai_today().strftime('%Y%m%d_%H%M%S')}.csv"
     return send_file(output, mimetype='text/csv', as_attachment=True, download_name=filename)
 
 @app.route('/import_data', methods=['POST'])
@@ -1274,7 +1272,7 @@ def login():
     <head>
         <meta charset="UTF-8">
         <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
-        <title>เข้าสู่ระบบ - ทองล้น</title>
+        <title>เข้าสู่ระบบ - ทรัพย์ล้น</title>
         <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
         <link href="https://fonts.googleapis.com/css2?family=Prompt:wght@300;400;500;600&display=swap" rel="stylesheet">
         <style>
@@ -1284,7 +1282,7 @@ def login():
     </head>
     <body class="d-flex align-items-center justify-content-center vh-100 p-3">
         <div class="card p-4 shadow-lg w-100" style="max-width: 380px;">
-            <h3 class="text-center mb-1 text-danger fw-bold">🔱 ทองล้น</h3>
+            <h3 class="text-center mb-1 text-danger fw-bold">🔱 ทรัพย์ล้น</h3>
             <p class="text-center text-muted small mb-4">ระบบบริหารจัดการการเงิน</p>
             {% if error %}
                 <div class="alert alert-danger py-2 text-center">{{ error }}</div>
